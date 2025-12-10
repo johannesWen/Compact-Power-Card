@@ -401,6 +401,8 @@ class CompactPowerCard extends (window.LitElement ||
     const gridCfg = this._getEntityConfig("grid");
     const homeCfg = this._getEntityConfig("home");
     const batteryCfg = this._getEntityConfig("battery");
+    const invertGrid = Boolean(gridCfg?.invert_state_values);
+    const invertBattery = Boolean(batteryCfg?.invert_state_values);
 
     const applyThreshold = (value, threshold) => {
       if (threshold == null) return value;
@@ -412,9 +414,11 @@ class CompactPowerCard extends (window.LitElement ||
     const batteryThreshold = this._parseThreshold(batteryCfg.threshold);
 
     const pv = Math.max(applyThreshold(this._getNumeric(pvCfg.entity), pvThreshold), 0);
-    const grid = applyThreshold(this._getNumeric(gridCfg.entity), gridThreshold);
+    const gridRaw = this._getNumeric(gridCfg.entity);
+    const batteryRaw = this._getNumeric(batteryCfg.entity);
+    const grid = applyThreshold(invertGrid ? -gridRaw : gridRaw, gridThreshold);
     const homeRaw = this._getNumeric(homeCfg.entity);
-    const battery = applyThreshold(this._getNumeric(batteryCfg.entity), batteryThreshold);
+    const battery = applyThreshold(invertBattery ? -batteryRaw : batteryRaw, batteryThreshold);
 
     const sourcesCfgRaw = this._config?.entities?.sources;
     const sourcesCfg = Array.isArray(sourcesCfgRaw) ? sourcesCfgRaw : [];
@@ -583,6 +587,7 @@ class CompactPowerCard extends (window.LitElement ||
     const batteryCharge = battery < 0 ? -battery : 0;
 
     const batteryToHome = Math.min(battDischarge, Math.max(homeEffective - pvToHome, 0));
+    const battDischargeAfterHome = Math.max(battDischarge - batteryToHome, 0);
     const remainingHomeNeed = Math.max(homeEffective - pvToHome - batteryToHome, 0);
     let gridHomeMagnitude = Math.min(gridImport, remainingHomeNeed);
     let gridImportAfterHome = Math.max(gridImport - gridHomeMagnitude, 0);
@@ -618,19 +623,22 @@ class CompactPowerCard extends (window.LitElement ||
     // Battery discharge
     const gridExport = grid > 0 ? grid : 0;
 
-    if (battDischarge > threshold && homeEffective > threshold)
+    if (batteryToHome > threshold)
       active["battery-home"] = {
         geom: geom["battery-home"],
-        magnitude: Math.min(battDischarge, homeEffective),
+        magnitude: batteryToHome,
         color: batteryColor,
       };
 
-    if (battDischarge > threshold && gridExport > threshold)
+    const gridExportRemaining = Math.max(gridExport - pvToGrid, 0);
+    if (battDischargeAfterHome > threshold && gridExportRemaining > threshold) {
+      const batteryToGrid = Math.min(battDischargeAfterHome, gridExportRemaining);
       active["battery-grid"] = {
         geom: geom["battery-grid"],
-        magnitude: Math.min(battDischarge, gridExport),
+        magnitude: batteryToGrid,
         color: batteryColor,
       };
+    }
 
     let maxFlow = 0;
     for (const f of Object.values(active)) {
@@ -773,6 +781,8 @@ class CompactPowerCard extends (window.LitElement ||
     const gridCfg = this._getEntityConfig("grid");
     const homeCfg = this._getEntityConfig("home");
     const batteryCfg = this._getEntityConfig("battery");
+    const invertGrid = Boolean(gridCfg?.invert_state_values);
+    const invertBattery = Boolean(batteryCfg?.invert_state_values);
     const sourcesCfgRaw = this._config?.entities?.sources;
     const sourcesCfg = Array.isArray(sourcesCfgRaw) ? sourcesCfgRaw : [];
 
@@ -780,10 +790,12 @@ class CompactPowerCard extends (window.LitElement ||
     const gridRawVal = this._formatEntity(gridCfg.entity);
     const battRawVal = this._formatEntity(batteryCfg.entity);
 
-    const gridNumeric = this._getNumeric(gridCfg.entity);
+    const gridNumericRaw = this._getNumeric(gridCfg.entity);
+    const gridNumeric = invertGrid ? -gridNumericRaw : gridNumericRaw;
     const gridUnit =
       this.hass?.states?.[gridCfg.entity]?.attributes?.unit_of_measurement || "";
-    const battNumeric = this._getNumeric(batteryCfg.entity);
+    const battNumericRaw = this._getNumeric(batteryCfg.entity);
+    const battNumeric = invertBattery ? -battNumericRaw : battNumericRaw;
     const battUnit =
       this.hass?.states?.[batteryCfg.entity]?.attributes?.unit_of_measurement || "";
     const battSocEntity = batteryCfg.soc || null;
@@ -985,7 +997,13 @@ class CompactPowerCard extends (window.LitElement ||
                   <span style="opacity:1;">${battVal}</span>
                 </div>
                 ${battSocLabel
-                  ? html`<div class="battery-soc" style="color:${batteryColor}; opacity:1;">
+                  ? html`<div
+                      class="battery-soc clickable"
+                      style="color:${batteryColor}; opacity:1;"
+                      @click=${(e) => {
+                        e.stopPropagation();
+                        this._openMoreInfo(battSocEntity || batteryCfg.entity);
+                      }}>
                       ${battSocLabel}
                     </div>`
                   : ""}
