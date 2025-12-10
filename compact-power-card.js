@@ -224,6 +224,37 @@ class CompactPowerCard extends (window.LitElement ||
         transform: translate(-50%, -50%);
         pointer-events: auto;
       }
+
+      /* Anchor helpers so labels grow away from the icon */
+      .overlay-item.anchor-right {
+        transform: translate(-100%, -50%);
+      }
+
+      .overlay-item.anchor-left {
+        transform: translate(0, -50%);
+      }
+
+      :host(.no-pv) .canvas,
+      ha-card.no-pv .canvas {
+        margin-top: -44px;
+      }
+
+      :host(.no-pv) #line-pv-grid,
+      :host(.no-pv) #line-pv-home,
+      :host(.no-pv) #line-pv-battery,
+      :host(.no-pv) #dot-pv-home,
+      :host(.no-pv) #dot-pv-grid,
+      :host(.no-pv) #dot-pv-battery,
+      :host(.no-pv) .pv-section,
+      ha-card.no-pv #line-pv-grid,
+      ha-card.no-pv #line-pv-home,
+      ha-card.no-pv #line-pv-battery,
+      ha-card.no-pv #dot-pv-home,
+      ha-card.no-pv #dot-pv-grid,
+      ha-card.no-pv #dot-pv-battery,
+      ha-card.no-pv .pv-section {
+        display: none;
+      }
     `;
   }
 
@@ -519,19 +550,23 @@ class CompactPowerCard extends (window.LitElement ||
     const active = {};
 
     // PV → (home → battery → grid)
+    let pvToHome = 0;
+    let pvToBattery = 0;
+    let pvToGrid = 0;
+
     if (pv > threshold) {
       const gridExport = grid > 0 ? grid : 0;
       const batteryCharge = battery < 0 ? -battery : 0;
 
       let remaining = pv;
 
-      const pvToHome = Math.min(remaining, homeEffective);
+      pvToHome = Math.min(remaining, homeEffective);
       remaining -= pvToHome;
 
-      const pvToBattery = Math.min(remaining, batteryCharge);
+      pvToBattery = Math.min(remaining, batteryCharge);
       remaining -= pvToBattery;
 
-      const pvToGrid = Math.min(remaining, gridExport);
+      pvToGrid = Math.min(remaining, gridExport);
       remaining -= pvToGrid;
 
       if (pvToHome > threshold)
@@ -542,24 +577,45 @@ class CompactPowerCard extends (window.LitElement ||
         active["pv-grid"] = { geom: geom["pv-grid"], magnitude: pvToGrid, color: pvColor };
     }
 
-    // Grid import (negative)
+    // Grid import (negative) – allocate only what PV/battery discharge didn't cover
     const gridImport = grid < 0 ? -grid : 0;
-    if (gridImport > gridImportThreshold && homeEffective > gridImportThreshold)
+    const battDischarge = battery > 0 ? battery : 0;
+    const batteryCharge = battery < 0 ? -battery : 0;
+
+    const batteryToHome = Math.min(battDischarge, Math.max(homeEffective - pvToHome, 0));
+    const remainingHomeNeed = Math.max(homeEffective - pvToHome - batteryToHome, 0);
+    let gridHomeMagnitude = Math.min(gridImport, remainingHomeNeed);
+    let gridImportAfterHome = Math.max(gridImport - gridHomeMagnitude, 0);
+    const remainingBatteryCharge = Math.max(batteryCharge - pvToBattery, 0);
+    let gridBatteryMagnitude = Math.min(gridImportAfterHome, remainingBatteryCharge);
+
+    // Fallback: if grid import exists but allocations are zero (rounding / mismatched sensors),
+    // send import somewhere sensible so flows still render.
+    if (gridImport > gridImportThreshold && gridHomeMagnitude === 0 && gridBatteryMagnitude === 0) {
+      if (remainingBatteryCharge > 0) {
+        gridBatteryMagnitude = Math.min(gridImport, remainingBatteryCharge || gridImport);
+        gridImportAfterHome = Math.max(gridImport - gridBatteryMagnitude, 0);
+      } else {
+        gridHomeMagnitude = gridImport;
+        gridImportAfterHome = 0;
+      }
+    }
+
+    if (gridHomeMagnitude > gridImportThreshold)
       active["grid-home"] = {
         geom: geom["grid-home"],
-        magnitude: Math.min(gridImport, homeEffective),
+        magnitude: gridHomeMagnitude,
         color: gridColor,
       };
 
-    if (gridImport > gridImportThreshold && battery < -threshold)
+    if (gridBatteryMagnitude > gridImportThreshold)
       active["grid-battery"] = {
         geom: geom["grid-battery"],
-        magnitude: Math.min(gridImport, -battery),
+        magnitude: gridBatteryMagnitude,
         color: gridColor,
       };
 
     // Battery discharge
-    const battDischarge = battery > 0 ? battery : 0;
     const gridExport = grid > 0 ? grid : 0;
 
     if (battDischarge > threshold && homeEffective > threshold)
@@ -711,6 +767,9 @@ class CompactPowerCard extends (window.LitElement ||
     const html = this.html;
 
     const pvCfg = this._getEntityConfig("pv");
+    const hasPv =
+      this._config?.entities &&
+      Object.prototype.hasOwnProperty.call(this._config.entities, "pv");
     const gridCfg = this._getEntityConfig("grid");
     const homeCfg = this._getEntityConfig("home");
     const batteryCfg = this._getEntityConfig("battery");
@@ -859,7 +918,7 @@ class CompactPowerCard extends (window.LitElement ||
 
 
     return html`
-      <ha-card>
+      <ha-card class="${hasPv ? "" : "no-pv"}">
         <div class="canvas">
           <svg viewBox="0 0 600 240" preserveAspectRatio="xMidYMid meet">
 
@@ -874,13 +933,14 @@ class CompactPowerCard extends (window.LitElement ||
                 d="M60 106 H260 Q280 106 280 126 V160" fill="none" />
           <path id="line-home-battery" class="flow-line"
                 d="M320 160 V126 Q320 106 340 106 H540" fill="none" />
+
+          <circle id="dot-pv-home"      r="5" fill="${pvColor}" opacity="0" />
           <path id="arc-grid-battery" class="flow-line"
                 d="M60 96 H285 Q300 76 315 96 H540"
                 fill="none" />
 
-          <!-- Flow dots -->
+          <!-- Remaining flow dots -->
           <circle id="dot-pv-grid"      r="5" fill="${pvColor}" opacity="0" />
-          <circle id="dot-pv-home"      r="5" fill="${pvColor}" opacity="0" />
           <circle id="dot-pv-battery"   r="5" fill="${pvColor}" opacity="0" />
           <circle id="dot-grid-home"    r="5" fill="${gridColor}" opacity="0" />
           <circle id="dot-grid-battery" r="5" fill="${gridColor}" opacity="0" />
@@ -889,13 +949,13 @@ class CompactPowerCard extends (window.LitElement ||
 
           </svg>
           <div class="overlay">
-            <div class="overlay-item" style="left:${(300/600)*100}%; top:${(40/240)*100}%;">
+            <div class="overlay-item pv-section" style="left:${(300/600)*100}%; top:${(36/240)*100}%;">
               <div class="node-marker pv-marker clickable" @click=${() => this._openMoreInfo(pvCfg.entity)}>
                 <div class="node-label" style="color:${pvColor}; opacity:${pvOpacity};">${pvVal}</div>
                 <ha-icon icon="mdi:solar-panel" style="color:${pvColor}; opacity:${pvOpacity}; filter:${!this._isLightTheme() && pvNumeric !== 0 ? `drop-shadow(0 0 10px ${pvColor})` : "none"};"></ha-icon>
               </div>
             </div>
-            <div class="overlay-item" style="left:${(60/600)*100}%; top:${(108/240)*100}%;">
+            <div class="overlay-item anchor-left" style="left:${(28/600)*100}%; top:${(108/240)*100}%;">
               <div class="node-marker grid-marker left clickable" @click=${() => this._openMoreInfo(gridCfg.entity)}>
                 <ha-icon icon="mdi:transmission-tower" style="color:${gridColor}; opacity:${gridOpacity}; filter:${!this._isLightTheme() && gridNumeric !== 0 ? `drop-shadow(0 0 10px ${gridColor})` : "none"};"></ha-icon>
                 <div class="node-label left" style="color:${gridColor};">
@@ -915,7 +975,7 @@ class CompactPowerCard extends (window.LitElement ||
                 <div class="home-label" style="color:${homeColor}; opacity:${homeOpacity};">${homeVal}</div>
               </div>
             </div>
-            <div class="overlay-item" style="left:${(556/600)*100}%; top:${(108/240)*100}%;">
+            <div class="overlay-item anchor-right" style="left:${(570/600)*100}%; top:${(108/240)*100}%;">
               <div class="node-marker battery-marker right clickable" @click=${() => this._openMoreInfo(batteryCfg.entity)}>
                 <ha-icon icon="${batteryIcon}" style="color:${batteryColor}; opacity:${batteryIconOpacity}; filter:${!this._isLightTheme() && battNumeric !== 0 ? `drop-shadow(0 0 10px ${batteryColor})` : "none"};"></ha-icon>
                 <div class="node-label right" style="color:${batteryColor}; opacity:${batteryLabelOpacity};">
