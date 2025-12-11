@@ -2,10 +2,14 @@
 
 <img width="513" height="211" alt="Screenshot 2025-12-10 at 12 27 40" src="https://github.com/user-attachments/assets/14b4b3f4-6fa3-4aa6-b56c-87ccf567c58d" />
 
-A compact power card for Home Assistant that supports a tighter user experience, as well as 8 sources of power from the home in a single card.
+<img width="478" height="198" alt="Screenshot 2025-12-11 at 09 00 40" src="https://github.com/user-attachments/assets/c25e187b-ed8a-4973-aa86-eb7f367f29c3" />
+
+A compact power card for Home Assistant that supports a tighter user experience, as well as 8 sources of power from the home in a single card. In addition, can show 6 entity labels for whatever you want, colour them how you need.
 
 ## Functionality
 
+- Upto 8 power measurement entities for the home that help calculate the rest of home usage
+- Upto 6 additional state labels to show related info, like battery %, grid voltage, PV energy or whatever you want.
 - Thresholds can be set on entities to fade out / hide the entity below the threshold.
 - Home power is calculated by default based on the grid/power/battery. You can force the raw state of the home sensor using config.
 - Grid, Home and Battery are mandatory sensors needed at this time. PV is optional.
@@ -29,9 +33,19 @@ A compact power card for Home Assistant that supports a tighter user experience,
       entity: sensor.pv_power
       color: var(--energy-solar-color)
       threshold: 20
+      decimal_places: 0
+      labels:
+        - entity: sensor.pv_energy_total_kwh
+          icon: mdi:solar-power-variant-outline
+        - entity: sensor.pv_energy_today_kwh
+          icon: mdi:solar-power-variant-outline
+          decimal_places: 2
     grid:
       entity: sensor.grid_power
       invert_state_values: true
+      labels:
+        - entity: sensor.grid_voltage
+          icon: mdi:lightning-bolt
     home:
       entity: sensor.load_power
       force_raw_state: false
