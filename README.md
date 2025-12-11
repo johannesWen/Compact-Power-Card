@@ -6,7 +6,7 @@
 
 <img width="478" height="198" alt="Screenshot 2025-12-11 at 09 00 40" src="https://github.com/user-attachments/assets/c25e187b-ed8a-4973-aa86-eb7f367f29c3" />
 
-A compact power card for Home Assistant that supports a tighter user experience, as well as 8 sources of power from the home in a single card. In addition, can show 6 entity labels for whatever you want, colour them how you need.
+Inspired by the excellent [power flow card plus](https://github.com/flixlix/power-flow-card-plus) - A compact power card for Home Assistant that supports a tighter user experience, and 8 sources of power from the home in a single card. In addition, the card can show 6 entity labels for whatever you want, colour and configure them how you need.
 
 ## Functionality
 
