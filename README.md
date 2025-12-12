@@ -12,13 +12,12 @@ Inspired by the excellent [power flow card plus](https://github.com/flixlix/powe
 
 ## Functionality
 
-- Upto 8 power measurement entities for the home that help calculate the rest of home usage
-- Upto 6 additional state labels to show related info, like battery %, grid voltage, PV energy or whatever you want.
+- Up to 8 power measurement entities for the home that help calculate the rest of home usage
+- Up to 6 additional state labels to show related info, like battery %, grid voltage, PV energy or whatever you want.
 - Thresholds can be set on entities to fade out / hide the entity below the threshold.
-- Home power is calculated by default based on the grid/power/battery. You can force the raw state of the home sensor using config.
-- Grid, Home and Battery are mandatory sensors needed at this time. PV is optional.
+- Home power is calculated by default based on the grid/power/battery. Alternatively, use a home power sensor.
 - Grid & Battery sensors expect +/- values for import/export or charge/discharge. These can be inverted if the default behaviour isn't what you want.
-- Icons and Colors can be overriden.
+- Icons, colors and units can be customised.
 
 ## Installation
 
@@ -81,7 +80,6 @@ entities:
 # Compact Power Card Settings (Quick Reference)
 
 ## Card-level
-- `threshold_mode` (default `calculations`): `calculations` zeroes sub-threshold values in both math and display; `display_only` keeps raw values in calculations and only dims/hides flows/labels based on thresholds.
 
 | Name           | Setting slug    | What it does                                                                                   |
 | -------------- | --------------- | ---------------------------------------------------------------------------------------------- |
@@ -103,16 +101,7 @@ In calculation mode:
 - If home entity is provided: Home calculation is based on the home entity state, minus the auxiliary sources by default (see `sources.subtract_from_home`)
 
 ## Entities
-Common keys for `pv`, `grid`, `home`, `battery`:
-- `entity`: sensor/entity id providing the value.
-- `color`: override line/icon/text color.
-- `threshold`: numerical cutoff; values below are treated as zero (per `threshold_mode`) and dimmed.
-- `decimal_places`: number of decimals shown (default 1).
-- `unit` or `unit_of_measurement`: display-only unit override (does not affect math).
-- `invert_state_values` (`grid`/`battery` only): flip sign of the reading.
-
-Home-specific:
-- If `home.entity` is provided, the card uses its value (minus aux usage); if omitted, home is inferred from pv/grid/battery minus aux.
+Common keys for `pv`, `grid`, `home`, `battery`. The following settings are possible:
 
 | Name                | Setting slug            | What it does                                                                    |
 | ------------------- | ----------------------- | ------------------------------------------------------------------------------- |
@@ -122,13 +111,60 @@ Home-specific:
 | Decimals            | `decimal_places`        | Number of decimals to display (default 1).                                      |
 | Unit override       | `unit` / `unit_of_measurement` | Display-only unit override; math always uses raw numeric values.         |
 | Invert state values | `invert_state_values`   | Flip sign of grid/battery readings (e.g., import/export, charge/discharge).     |
-| Home entity use     | `home.entity`           | If present, use the home sensor (optionally minus aux); if absent, infer home.  |
+
+```
+entities:
+  pv:
+    entity: sensor.solar_power            
+  grid:
+    entity: sensor.grid_power
+  home:
+    entity: sensor.home_power
+  battery:
+    entity: sensor.battery_power
+```
+
+The card supports many combinations: PV/Grid/Home/Battery, PV/Grid/Home, Battery/Grid/Home, Grid/Home
+
+Home-specific:
+- If `home` is provided, the card uses its value (minus any aux sensor power usage); if omitted, home is inferred from pv/grid/battery power, minus any aux power sources. (see aux sources below for more)
+
+## Aux sources
+
+Aux sources are up to 8 power sources within your home that you want to show in the card. By default, their power values will be subtracted from the home power value. If you don't want that to happen, set `subtract_from_home` under `sources`.
+
+| Name                    | Setting slug                      | What it does                                                                     |
+| ----------------------- | --------------------------------- | -------------------------------------------------------------------------------- |
+| Source entity           | `entity`                | Sensor/entity id for an auxiliary load.                                          |
+| Source attribute        | `attribute`             | Read from an attribute instead of state.                                         |
+| Source icon             | `icon`                  | Optional icon for the source badge.                                              |
+| Source color            | `color`                 | Optional color override for that source.                                         |
+| Source threshold        | `threshold`             | Dims/zeros source below threshold (per `threshold_mode`).                        |
+| Source decimals         | `decimal_places`        | Decimal places for that source.                                                  |
+| Source unit             | `unit` / `unit_of_measurement` | Display unit override for that source.                       |
+| Subtract from home      | `subtract_from_home`      | If true (default), subtract summed aux usage from home value/calculation.        |
+
+```
+  sources:
+    subtract_from_home: true 
+    list:
+      - entity: sensor.ev_charger_power
+        icon: mdi:car-electric
+        threshold: 50
+        color: "#FFFFFF"
+      - entity: sensor.pool_pump_power
+        icon: mdi:pool
+        threshold: 50
+      - entity: climate.garage
+        attribute: temperature
+        unit: "C"
+        icon: mdi:pool
+        threshold: 50
+```
 
 ## Labels (per pv/grid/battery)
-- `labels`: array (max 2) of objects:
-  - `entity`: sensor/entity id.
-  - `attribute` (optional): read value from an attribute instead of state.
-  - `icon`, `color`, `threshold`, `decimal_places`, `unit|unit_of_measurement` (display unit override).
+
+Labels can be used to display "other" information - that can be more power stats, energy stats, weather, whatever you want. Note: these are just labels, they do not factor into the power diagram or calculations at all. 
 
 | Name          | Setting slug                 | What it does                                                         |
 | ------------- | ---------------------------- | -------------------------------------------------------------------- |
@@ -141,43 +177,8 @@ Home-specific:
 | Label decimals | `labels[].decimal_places`   | Decimal places for that label.                                       |
 | Label unit    | `labels[].unit` / `labels[].unit_of_measurement` | Display unit override for that label.                    |
 
-## Aux sources
-- `sources`: array (max 8) of objects, or an object with `list|items|entities` containing that array and optional options:
-  - `entity`: sensor/entity id.
-  - `attribute` (optional): read value from an attribute.
-  - `icon`, `color`, `threshold`, `decimal_places`, `unit|unit_of_measurement`.
-  - `threshold_mode` applies to sources for calculations (home inference) and opacity.
-  - `subtract_from_home` (default `true`): subtract summed auxiliary usage from the home value/calculation. Set `false` to leave the home value untouched by auxiliary sources.
-
-| Name                    | Setting slug                      | What it does                                                                     |
-| ----------------------- | --------------------------------- | -------------------------------------------------------------------------------- |
-| Sources wrapper         | `sources`                         | Array of aux items, or object with `list|items|entities` plus options.           |
-| Source entity           | `sources[].entity`                | Sensor/entity id for an auxiliary load.                                          |
-| Source attribute        | `sources[].attribute`             | Read from an attribute instead of state.                                         |
-| Source icon             | `sources[].icon`                  | Optional icon for the source badge.                                              |
-| Source color            | `sources[].color`                 | Optional color override for that source.                                         |
-| Source threshold        | `sources[].threshold`             | Dims/zeros source below threshold (per `threshold_mode`).                        |
-| Source decimals         | `sources[].decimal_places`        | Decimal places for that source.                                                  |
-| Source unit             | `sources[].unit` / `sources[].unit_of_measurement` | Display unit override for that source.                       |
-| Sources threshold mode  | `sources.threshold_mode`          | Optional override for how thresholds apply to sources.                           |
-| Subtract from home      | `sources.subtract_from_home`      | If true (default), subtract summed aux usage from home value/calculation.        |
-
 ## Unit & formatting behavior
+- W values auto-convert to kW when ≥ 1000 W.
 - kWh values auto-convert to MWh when ≥ 1000 kWh.
 - `decimal_places` controls formatting everywhere the value is shown.
 - `unit|unit_of_measurement` overrides display text only; calculations always use numeric state/attribute.
-
-| Name              | Setting slug/behavior        | What it does                                                            |
-| ----------------- | ---------------------------- | ----------------------------------------------------------------------- |
-| Auto kWh → MWh    | (behavior)                  | Converts kWh values ≥ 1000 to MWh for display.                          |
-| Decimal places    | `decimal_places`            | Controls decimal precision for displayed values.                        |
-| Unit override     | `unit` / `unit_of_measurement` | Overrides displayed unit only; math still uses raw numeric state.    |
-
-## Visibility rules
-- PV visuals hide when `pv` key is absent.
-- Opacity for each entity/label follows its `threshold` and the global `threshold_mode`.
-
-| Name               | Setting slug/behavior | What it does                                                         |
-| ------------------ | --------------------- | -------------------------------------------------------------------- |
-| PV visibility      | (behavior)            | Hides PV visuals when `entities.pv` is not provided.                 |
-| Threshold opacity  | `threshold` / `threshold_mode` | Dims/hides flows and labels when below thresholds per mode.   |
