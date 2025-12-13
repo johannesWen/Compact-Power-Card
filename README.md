@@ -53,6 +53,7 @@ entities:
 | Name           | Setting slug    | What it does                                                                                   |
 | -------------- | --------------- | ---------------------------------------------------------------------------------------------- |
 | Threshold mode | `threshold_mode`| Chooses whether sub-threshold values are zeroed in math (`calculations`) or only dimmed (`display_only`). |
+| Card Height Factor | `height_factor`| Default: 1.0, set it if you want the height of the card to be bigger, e.g. 1.5, 2.0 |
 
 In display_only mode:
 
@@ -105,7 +106,21 @@ entities:
 
 The card supports many combinations: PV/Grid/Home/Battery, PV/Grid/Home, Battery/Grid/Home, Grid/Home
 
-Home-specific:
+### Supporting multiple batteries
+
+The card will support more than 1 battery, this is experimental at the moment. Each battery can have a soc entity too. 
+
+```yaml
+entities:
+  battery:
+    - entity: sensor.battery_power_1
+    - entity: sensor.battery_power_2
+    - entity: sensor.battery_power_3
+      color: "#ff0000"
+      battery_soc: sensor.battery_soc
+```
+
+### Home specific
 - If `home` is provided, the card uses its value (minus any aux sensor power usage); if omitted, home is inferred from pv/grid/battery power, minus any aux power sources. (see aux sources below for more)
 
 ## Aux sources
