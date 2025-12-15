@@ -1468,14 +1468,46 @@ class CompactPowerCard extends (window.LitElement ||
     const batteryLabelHidden = this._isBelowThreshold(battNumericW, batteryThresholdDisplay);
 
     const battDisplay = battNumericW;
-    const batterySocPrimary = this._getBatterySocValue(batteryCfg);
+    const batterySocEntries = batteryList.map((cfg) => {
+      const soc = this._getBatterySocValue(cfg);
+      const rawCap = cfg?.battery_capacity;
+      const cap =
+        rawCap == null
+          ? null
+          : Number.isFinite(rawCap)
+          ? rawCap
+          : Number.isFinite(parseFloat(rawCap))
+          ? parseFloat(rawCap)
+          : null;
+      const capKwh = cap != null && cap > 0 ? cap : null;
+      return { soc, cap: capKwh };
+    });
+    const socValues = batterySocEntries.map((e) => e.soc).filter((v) => Number.isFinite(v));
+    const allHaveCap =
+      batterySocEntries.length > 0 &&
+      batterySocEntries.every((e) => Number.isFinite(e.soc) && Number.isFinite(e.cap));
+    const batterySocPrimary = allHaveCap
+      ? (() => {
+          const totalCap = batterySocEntries.reduce((sum, e) => sum + (e.cap || 0), 0);
+          if (totalCap <= 0) return null;
+          const energy = batterySocEntries.reduce(
+            (sum, e) => sum + (e.cap || 0) * (e.soc || 0) / 100,
+            0
+          );
+          return (energy / totalCap) * 100;
+        })()
+      : socValues.length > 0
+      ? socValues.reduce((sum, v) => sum + v, 0) / socValues.length
+      : null;
     const batterySocDisplay = batteryShowSoc && Number.isFinite(batterySocPrimary)
       ? Math.round(batterySocPrimary)
       : null;
     const battVal = Number.isFinite(battDisplay)
       ? this._formatPowerWithOverride(Math.abs(battDisplay), batteryDecimals, battUnit, batteryUnitOverride ?? null)
       : this._formatEntity(batteryCfg.entity, batteryDecimals, null, batteryUnitOverride);
-    const battValDisplay = batterySocDisplay != null ? `${battVal} | ${batterySocDisplay}%` : battVal;
+    const battValDisplay = batterySocDisplay != null
+      ? html`${renderValue(battVal)} | <span class="value-number">${batterySocDisplay}</span>%`
+      : battVal;
     const battArrow =
       battDisplay > 0 ? "mdi:arrow-left" : battDisplay < 0 ? "mdi:arrow-right" : null;
     const batteryIcon = Number.isFinite(batterySocPrimary)
@@ -1684,7 +1716,7 @@ class CompactPowerCard extends (window.LitElement ||
                 ? `${displayVal} | ${Math.round(soc)}%`
                 : displayVal;
               const displayValBold = Number.isFinite(soc)
-                ? html`${renderValue(displayVal)} | <span class="value-number">${Math.round(soc)}%</span>`
+                ? html`${renderValue(displayVal)} | <span class="value-number">${Math.round(soc)}</span>%`
                 : renderValue(displayVal);
               const arrow =
                 numericW > 0 ? "mdi:arrow-left" : numericW < 0 ? "mdi:arrow-right" : null;
