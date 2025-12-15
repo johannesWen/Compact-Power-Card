@@ -495,13 +495,26 @@ class CompactPowerCard extends (window.LitElement ||
 
   _getSourcesConfig() {
     const raw = this._config?.entities?.sources;
-    let subtractFromHome = true;
+    const hasTopLevelNew = Object.prototype.hasOwnProperty.call(
+      this._config || {},
+      "subtract_sources_from_home"
+    );
+    const hasTopLevelLegacy = Object.prototype.hasOwnProperty.call(this._config || {}, "subtract_from_home");
+    const topLevelNew = hasTopLevelNew
+      ? this._coerceBoolean(this._config?.subtract_sources_from_home, true)
+      : null;
+    const topLevelLegacy = hasTopLevelLegacy
+      ? this._coerceBoolean(this._config?.subtract_from_home, true)
+      : null;
+    const hasTopLevelSubtract = hasTopLevelNew || hasTopLevelLegacy;
+    const topLevelSubtract = topLevelNew != null ? topLevelNew : topLevelLegacy;
+    let subtractFromHome = topLevelSubtract != null ? topLevelSubtract : true;
     let list = [];
 
     if (Array.isArray(raw)) {
       list = raw;
     } else if (raw && typeof raw === "object") {
-      if (Object.prototype.hasOwnProperty.call(raw, "subtract_from_home")) {
+      if (!hasTopLevelSubtract && Object.prototype.hasOwnProperty.call(raw, "subtract_from_home")) {
         subtractFromHome = this._coerceBoolean(raw.subtract_from_home, true);
       }
       if (Array.isArray(raw.list)) list = raw.list;
@@ -555,14 +568,16 @@ class CompactPowerCard extends (window.LitElement ||
     const u = obj.attributes.unit_of_measurement;
     if (unitOverride) {
       const num = parseFloat(s);
+      const dec = String(unitOverride || "").toLowerCase() === "w" ? 0 : decimals;
       if (Number.isFinite(num)) {
-        return `${num.toFixed(decimals)} ${unitOverride}`;
+        return `${num.toFixed(dec)} ${unitOverride}`;
       }
       return `${s} ${unitOverride}`;
     }
     if (s === "unknown" || s === "unavailable") return s;
     const num = parseFloat(s);
     const uLower = typeof u === "string" ? u.toLowerCase() : "";
+    const decimalsToUse = uLower === "w" ? 0 : decimals;
     // Auto convert kWh → MWh when large
     if (Number.isFinite(num) && uLower === "kwh" && Math.abs(num) >= 1000) {
       const mwh = num / 1000;
@@ -570,8 +585,8 @@ class CompactPowerCard extends (window.LitElement ||
     }
     if (this._isWattToKw(num, u)) return this._formatPower(num, u, decimals);
     if (Number.isFinite(num)) {
-      if (u) return `${num.toFixed(decimals)} ${u}`;
-      return num.toFixed(decimals);
+      if (u) return `${num.toFixed(decimalsToUse)} ${u}`;
+      return num.toFixed(decimalsToUse);
     }
     return u ? `${s} ${u}` : s;
   }
@@ -710,9 +725,17 @@ class CompactPowerCard extends (window.LitElement ||
     return n;
   }
 
+  _getCardDecimalPlaces() {
+    const parsed = this._parseDecimalPlaces(this._config?.decimal_places);
+    return parsed == null ? null : parsed;
+  }
+
   _getDecimalPlaces(cfg) {
     const parsed = this._parseDecimalPlaces(cfg?.decimal_places);
-    return parsed == null ? 1 : parsed;
+    if (parsed != null) return parsed;
+    const cardLevel = this._getCardDecimalPlaces();
+    if (cardLevel != null) return cardLevel;
+    return 1;
   }
 
   _getUnitOverride(cfg) {
@@ -1447,7 +1470,7 @@ class CompactPowerCard extends (window.LitElement ||
     const sourcePositions = [];
     const homeX = homeCenterX;
     const homeRowYBase = 145; // base Y for aux row; actual Y will be adjusted via pctHomeY
-    const slotSpacing = [60, 120, 180, 240]; // fixed design spacing (do not scale with width)
+    const slotSpacing = [50, 100, 150, 200]; // fixed design spacing (do not scale with width)
     const leftSlots = slotSpacing.map((d) => homeX - d);
     const rightSlots = slotSpacing.map((d) => homeX + d);
     for (let i = 0; i < normalizedSources.length && i < 8; i++) {
