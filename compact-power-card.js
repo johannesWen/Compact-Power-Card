@@ -63,6 +63,8 @@ class CompactPowerCard extends (window.LitElement ||
     this._homeEffective = null;
     this._homeEffectiveUnit = "W";
     this._resizeObserver = null;
+    this._hostWidth = null;
+    this._hostHeight = null;
   }
 
   set hass(hass) {
@@ -365,7 +367,14 @@ class CompactPowerCard extends (window.LitElement ||
   connectedCallback() {
     super.connectedCallback();
     if (!this._resizeObserver) {
-      this._resizeObserver = new ResizeObserver(() => this._updateScale());
+        this._resizeObserver = new ResizeObserver((entries) => {
+          const rect = entries?.[0]?.contentRect;
+          if (rect) {
+            this._hostWidth = rect.width;
+            this._hostHeight = rect.height;
+          }
+          this._updateScale();
+        });
     }
     this._resizeObserver.observe(this);
     this._updateScale();
@@ -381,7 +390,7 @@ class CompactPowerCard extends (window.LitElement ||
 
   _updateScale() {
     const rect = this.getBoundingClientRect ? this.getBoundingClientRect() : null;
-    const hostWidth = rect?.width || 0;
+    const hostWidth = this._hostWidth != null ? this._hostWidth : rect?.width || 0;
     if (!hostWidth || hostWidth < 200) {
       this.style.setProperty("--cpc-scale", "1");
       return;
@@ -975,9 +984,8 @@ class CompactPowerCard extends (window.LitElement ||
     const designHeight = 184;
     const defaultWidth = 512;
     const defaultHeight = 184;
-    const hostRect = this.getBoundingClientRect ? this.getBoundingClientRect() : null;
-    const baseWidth = Math.max(200, hostRect?.width || defaultWidth);
-    const baseHeight = Math.max(120, hostRect?.height || defaultHeight);
+    const baseWidth = Math.max(200, this._hostWidth || defaultWidth);
+    const baseHeight = Math.max(120, this._hostHeight || defaultHeight);
     const extraHeight = Math.max(0, baseHeight - designHeight);
     const anchorLeftX = 51.2;
     const anchorRightMargin = 51.2;
@@ -1520,14 +1528,21 @@ class CompactPowerCard extends (window.LitElement ||
     const sourcePositions = [];
     const homeX = homeCenterX;
     const homeRowYBase = 145; // base Y for aux row; actual Y will be adjusted via pctHomeY
-    const slotSpacing = [50, 100, 150, 200]; // fixed design spacing (do not scale with width)
-    const leftSlots = slotSpacing.map((d) => homeX - d);
-    const rightSlots = slotSpacing.map((d) => homeX + d);
-    for (let i = 0; i < normalizedSources.length && i < 8; i++) {
-      const isLeft = i % 2 === 0;
-      const idx = Math.floor(i / 2);
-      const x = isLeft ? leftSlots[idx] : rightSlots[idx];
-      sourcePositions.push({ x, y: homeRowYBase });
+    const maxDevices = Math.min(normalizedSources.length, 8);
+    if (maxDevices > 0) {
+      const scale = baseWidth / designWidth;
+      const rawOffsets = [50, 100, 150, 200];
+      const offsets = rawOffsets.map((d) => d * scale);
+      const pad = Math.max(16, baseWidth * 0.05);
+      for (let i = 0; i < maxDevices; i++) {
+        const isLeft = i % 2 === 0;
+        const idx = Math.floor(i / 2);
+        const off = offsets[idx] || offsets[offsets.length - 1];
+        const x = isLeft ? homeX - off : homeX + off;
+        const clampedX = Math.max(pad, Math.min(baseWidth - pad, x));
+        const pct = (clampedX / baseWidth) * 100;
+        sourcePositions.push({ x: clampedX, y: homeRowYBase, leftPct: pct });
+      }
     }
 
     const sources = normalizedSources.map((src, idx) => {
@@ -1549,7 +1564,7 @@ class CompactPowerCard extends (window.LitElement ||
       const threshold = this._toWatts(this._parseThreshold(src.threshold), "W", true);
       const opacity = this._opacityFor(numericW, threshold);
       const hidden = this._isBelowThreshold(numericW, threshold);
-      const leftPct = (pos.x / baseWidth) * 100;
+      const leftPct = pos.leftPct != null ? pos.leftPct : (pos.x / baseWidth) * 100;
       const topPctVal = pctHomeY(pos.y);
       return {
         entity,
@@ -1846,7 +1861,7 @@ class CompactPowerCard extends (window.LitElement ||
                       >
                         <div class="aux-label" style="padding-top: 0px; padding-bottom: 0px; margin-top: 4px; padding-left: 1px; padding-right: 1px; opacity:${b.hidden ? 0.35 : b.opacity};">
                           ${b.arrow
-                            ? html`<ha-icon class="inline-icon" icon="${b.arrow}" style="color:${b.color}; opacity:1; --mdc-icon-size: calc(14px * var(--cpc-scale, 1));"></ha-icon>`
+                            ? html`<ha-icon class="inline-icon" icon="${b.arrow}" style="color:${b.color}; opacity:1; --mdc-icon-size: calc(12px * var(--cpc-scale, 1));"></ha-icon>`
                             : ""}
                           ${b.valNode || renderValue(b.val)}
                         </div>
@@ -1858,7 +1873,7 @@ class CompactPowerCard extends (window.LitElement ||
               : ""}
 
             ${sources.map(
-              (src) => html`<div class="overlay-item" style="left:${src.leftPct}%; top:${src.topPct}%;">
+              (src) => html`<div class="overlay-item" style="left:${src.leftPct}%; top:${src.topPct}%; transform: translate(-50%, -50%);">
                 <div class="aux-marker clickable" @click=${() => this._openMoreInfo(src.entity || null)}>
                   <ha-icon icon="${src.icon}" style="color:${src.color}; opacity:1; filter:${!this._isLightTheme() && src.numeric !== 0 ? `drop-shadow(0 0 10px ${src.color})` : "none"};"></ha-icon>
                   <div class="aux-label" style="color:${src.color}; opacity:${src.hidden ? 0.35 : src.opacity};">${renderValue(src.val)}</div>
