@@ -53,22 +53,24 @@ entities:
 | Name           | Setting slug    | What it does                                                                                   |
 | -------------- | --------------- | ---------------------------------------------------------------------------------------------- |
 | Threshold mode | `threshold_mode`| Chooses whether sub-threshold values are zeroed in math (`calculations`) or only dimmed (`display_only`). |
+| Decimal places | `decimal_places`| Default decimal places for all labels/values unless overridden at the entity/label level. |
+| Subtract aux from home | `subtract_sources_from_home` | If true (default), subtract summed aux sources from the home value.
 | Power Unit Override | `power_unit`| set to W, kW or mW |
 
 In display_only mode:
 
 - Thresholds determine the opacity of the icon and labels (faded when below threshold)
 - Thresholds determine the animation of power flow lines (off when below threshold)
-- If home entity isn't provided: Home calculation is based on the raw values from PV, Grid, Battery and auxiliary sources (unless `sources.subtract_from_home: false`)
-- If home entity is provided: Home calculation is based on the home entity state, minus the auxiliary sources by default (see `sources.subtract_from_home`)
+- If home entity isn't provided: Home calculation is based on the raw values from PV, Grid, Battery and auxiliary sources (unless `subtract_sources_from_home: false`).
+- If home entity is provided: Home calculation is based on the home entity state, minus the auxiliary sources by default (see `subtract_sources_from_home`; legacy `sources.subtract_from_home` also works).
 
 In calculation mode:
 
 - Thresholds determine the opacity of the icon and labels (faded when below threshold)-
 - Thresholds determine the animation of power flow lines (off when below threshold)
 - If threshold isn't met, then the raw value is 0
-- If home entity isn't provided: Home calculation is based on the raw values from PV, Grid, Battery and auxiliary sources (unless `sources.subtract_from_home: false`)
-- If home entity is provided: Home calculation is based on the home entity state, minus the auxiliary sources by default (see `sources.subtract_from_home`)
+- If home entity isn't provided: Home calculation is based on the raw values from PV, Grid, Battery and auxiliary sources (unless `subtract_sources_from_home: false`).
+- If home entity is provided: Home calculation is based on the home entity state, minus the auxiliary sources by default (see `subtract_sources_from_home`; legacy `sources.subtract_from_home` also works).
 
 Example:
 ```yaml
@@ -84,7 +86,7 @@ Common keys for `pv`, `grid`, `home`, `battery`. The following settings are poss
 | Entity              | `entity`                | Sensor/entity id used for values.                                               |
 | Color               | `color`                 | Overrides line/icon/text color for that entity.                                 |
 | Threshold           | `threshold`             | Values below this are zeroed (per `threshold_mode`) and dimmed.                 |
-| Decimals            | `decimal_places`        | Number of decimals to display (default 1).                                      |
+| Decimals            | `decimal_places`        | Number of decimals to display (defaults to card-level `decimal_places`, or 1).                                      |
 | Unit override       | `unit` / `unit_of_measurement` | Display-only unit override; math always uses raw numeric values.         |
 | Invert state values | `invert_state_values`   | Flip sign of grid/battery readings (e.g., import/export, charge/discharge).     |
 
@@ -120,12 +122,23 @@ entities:
       battery_soc: sensor.battery_soc
 ```
 
+if you set multiple batteries, the 2x battery labels must be setup like this:
+
+```yaml
+  battery:
+    - entity: input_number.battery_power_1
+    - entity: input_number.battery_power_2
+  battery_labels:
+    - entity: sensor.tempest_air_density
+    - entity: sensor.my_sensor
+```
+
 ### Home specific
 - If `home` is provided, the card uses its value (minus any aux sensor power usage); if omitted, home is inferred from pv/grid/battery power, minus any aux power sources. (see aux sources below for more)
 
 ## Aux sources
 
-Aux sources are up to 8 power sources within your home that you want to show in the card. By default, their power values will be subtracted from the home power value. If you don't want that to happen, set `subtract_from_home` under `sources`.
+Aux sources are up to 8 power sources within your home that you want to show in the card. By default, their power values will be subtracted from the home power value. If you don't want that to happen, set the card-level `subtract_sources_from_home: false`.
 
 | Name                    | Setting slug                      | What it does                                                                     |
 | ----------------------- | --------------------------------- | -------------------------------------------------------------------------------- |
@@ -134,27 +147,25 @@ Aux sources are up to 8 power sources within your home that you want to show in 
 | Icon             | `icon`                  | Optional icon for the source badge.                                              |
 | Color            | `color`                 | Optional color override for that source.                                         |
 | Threshold        | `threshold`             | Dims/zeros source below threshold (in watts) (per `threshold_mode`).                        |
-| Decimals         | `decimal_places`        | Decimal places for that source.                                                  |
+| Decimals         | `decimal_places`        | Decimal places for that source (defaults to card-level `decimal_places`).                                                  |
 | Unit of Measurement             | `unit` / `unit_of_measurement` | Display unit override for that source.                       |
-| Subtract from home?      | `subtract_from_home`      | If true (default), subtract summed aux usage from home value/calculation.        |
 
 Example below of how sources can be setup:
 
 ```yaml
+  subtract_sources_from_home: true
   sources:
-    subtract_from_home: true 
-    list:
-      - entity: sensor.ev_charger_power
-        icon: mdi:car-electric
-        threshold: 50
-        color: "#FFFFFF"
-      - entity: sensor.pool_pump_power
-        icon: mdi:pool
-        threshold: 50
-      - entity: climate.garage
-        attribute: temperature
-        unit: "C"
-        threshold: 50
+    - entity: sensor.ev_charger_power
+      icon: mdi:car-electric
+      threshold: 50
+      color: "#FFFFFF"
+    - entity: sensor.pool_pump_power
+      icon: mdi:pool
+      threshold: 50
+    - entity: climate.garage
+      attribute: temperature
+      unit: "C"
+      threshold: 50
 ```
 
 ## Labels (per pv/grid/battery)
@@ -169,7 +180,7 @@ Labels can be used to display "other" information - that can be more power stats
 | Icon    | `icon`              | Optional icon shown next to the label.                               |
 | Color   | `color`             | Optional color override for the label text/icon.                     |
 | Threshold | `threshold`       | Dims/hides label when below threshold (in watts) (per `threshold_mode`).        |
-| Decimals | `decimal_places`   | Decimal places for that label.                                       |
+| Decimals | `decimal_places`   | Decimal places for that label (defaults to card-level `decimal_places`).                                       |
 | Unit of Measurement    | `.unit` / `labels[].unit_of_measurement` | Display unit override for that label.                    |
 
 Example of a label setup:
@@ -189,7 +200,8 @@ Example of a label setup:
 ## Unit & Formatting behavior
 - W values auto-convert to kW when ≥ 1000 W.
 - kWh values auto-convert to MWh when ≥ 1000 kWh.
-- `decimal_places` controls formatting everywhere the value is shown.
+- `decimal_places` can be set at the card level and overridden per entity/label.
+- Watts always display with 0 decimal places.
 - `unit|unit_of_measurement` overrides display text only; calculations always use numeric state/attribute.
 - `threshold` should be set in watts.
 
@@ -200,6 +212,7 @@ The following example shows a mixed configuration of power sources, labels and a
 ```yaml
 type: custom:compact-power-card
 threshold_mode: calculations
+subtract_sources_from_home: true
 entities:
   pv:
     entity: sensor.solar_power
@@ -229,17 +242,15 @@ entities:
       - entity: sensor.battery_soc
         unit: "%"
   sources:
-    subtract_from_home: true 
-    list:
-      - entity: sensor.ev_charger_power
-        icon: mdi:car-electric
-        threshold: 50
-        color: "#FFFFFF"
-      - entity: sensor.pool_pump_power
-        icon: mdi:pool
-        threshold: 50
-      - entity: climate.garage
-        attribute: temperature
-        unit: "C"
-        threshold: 50
+    - entity: sensor.ev_charger_power
+      icon: mdi:car-electric
+      threshold: 50
+      color: "#FFFFFF"
+    - entity: sensor.pool_pump_power
+      icon: mdi:pool
+      threshold: 50
+    - entity: climate.garage
+      attribute: temperature
+      unit: "C"
+      threshold: 50
 ```
