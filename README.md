@@ -55,6 +55,8 @@ entities:
 | Subtract devices from home | `subtract_devices_from_home` | If true, subtract summed devices from the home value. Default: `false`. |
 | Power Unit Override | `power_unit`| set to W, kW or mW |
 
+### Thresholds in detail
+
 In display_only mode:
 
 - Thresholds determine the opacity of the icon and labels (faded when below threshold)
