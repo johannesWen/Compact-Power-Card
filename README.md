@@ -2,7 +2,7 @@
 
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/pacemaker82/compact-power-card/total?label=Total%20Downloads) ![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/pacemaker82/compact-power-card/latest/total?label=Latest%20Version)
 
-<img width="908" height="581" alt="Screenshot 2025-12-15 at 11 56 29" src="https://github.com/user-attachments/assets/a4ba6978-55f0-43a6-a15c-2c846be1e6bc" />
+<img width="907" height="641" alt="Screenshot 2025-12-17 at 07 33 54" src="https://github.com/user-attachments/assets/644c2fb3-163b-44b9-9705-cd5bb1a323d3" />
 
 Inspired by the excellent [power flow card plus](https://github.com/flixlix/power-flow-card-plus) - A compact power card for Home Assistant that supports a tighter user experience, and 8 power devices/feeds from the home in a single card. In addition, the card can show 6 entity labels for whatever you want, colour and configure them how you need.
 
@@ -46,7 +46,7 @@ entities:
 
 ## Managing the size of the card
 
-This card is designed for the new [Home Assistant Sections UI](https://www.home-assistant.io/dashboards/sections/), introduced in 2024. This allows you to scale the card horizontally or vertically as you see fit. The card will dynamically resize to fit the rows and columns you setup in the card UI:
+This card is designed for the new [Home Assistant Sections UI](https://www.home-assistant.io/dashboards/sections/), introduced in 2014. This allows you to scale the card horizontally or vertically as you see fit. The card will dynamically resize to fit the rows and columns you setup in the card UI:
 
 <img width="1003" height="750" alt="Screenshot 2025-12-15 at 16 05 36" src="https://github.com/user-attachments/assets/f176dea8-f834-4ece-a12e-358fc5661700" />
 
@@ -59,7 +59,9 @@ This card is designed for the new [Home Assistant Sections UI](https://www.home-
 | Threshold mode | `threshold_mode`| Chooses whether sub-threshold values are zeroed in math (`calculations`) or only dimmed (`display_only`). |
 | Decimal places | `decimal_places`| Default decimal places for all labels/values unless overridden at the entity/label level. |
 | Subtract devices from home | `subtract_devices_from_home` | If true, subtract summed devices from the home value. Default: `false`. |
-| Power Unit Override | `power_unit`| set to W, kW or mW |
+| Power Unit Override | `power_unit`| Set to W, kW or mW |
+| Show curved lines? | `curved_lines`| Set to `false` if you want a more straight-edge look. Default `true` |
+| Curved Line Radius | `curve_factor`| `1` to `5`, `1` is default. |
 
 ### Thresholds in detail
 
@@ -82,6 +84,8 @@ Example:
 ```yaml
 type: custom:compact-power-card
 threshold_mode: display_only
+curved_lines: true
+curve_factor: 5
 ```
 
 ## Entities
