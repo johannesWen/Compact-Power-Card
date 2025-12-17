@@ -61,7 +61,7 @@ This card is designed for the new [Home Assistant Sections UI](https://www.home-
 | Subtract devices from home | `subtract_devices_from_home` | If true, subtract summed devices from the home value. Default: `false`. |
 | Power Unit Override | `power_unit`| Set to W, kW or mW |
 | Show curved lines? | `curved_lines`| Set to `false` if you want a more straight-edge look. Default `true` |
-| Curved Line Radius | `curve_factor`| `1` to `5`, `1` is default. |
+| Curved Line Radius | `curve_factor`| Adjusts the curve radius. `1` to `5`, `1` is default. Only works when `curved_lines: true` |
 
 ### Thresholds in detail
 
