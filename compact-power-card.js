@@ -512,6 +512,10 @@ class CompactPowerCard extends (window.LitElement ||
     return Boolean(val);
   }
 
+  _useCurvedLines() {
+    return this._coerceBoolean(this._config?.curved_lines, true);
+  }
+
   _getSourcesConfig() {
     // Prefer new `devices` key; fall back to legacy `sources` for backwards compatibility.
     const raw =
@@ -849,6 +853,7 @@ class CompactPowerCard extends (window.LitElement ||
     const pvUnit =
       this.hass?.states?.[pvCfg.entity]?.attributes?.unit_of_measurement ||
       "";
+    const curvedLines = this._useCurvedLines();
     const gridUnit =
       this.hass?.states?.[gridCfg.entity]?.attributes?.unit_of_measurement ||
       "";
@@ -1045,6 +1050,25 @@ class CompactPowerCard extends (window.LitElement ||
     const homeNode = { x: homeCenterX, y: homeLineEndY };
 
     // Straight-line geometry between anchor points
+    const gridBatteryGeom = curvedLines
+      ? {
+          mode: "path",
+          pathId: "arc-grid-battery",
+          fallback: { mode: "line", x1: gridNode.x, y1: gridNode.y, x2: batteryNode.x, y2: batteryNode.y },
+          ctrlX: gridBatteryCtrlX,
+          ctrlY: gridBatteryCtrlY,
+        }
+      : { mode: "line", x1: gridNode.x, y1: gridNode.y, x2: batteryNode.x, y2: batteryNode.y };
+    const batteryGridGeom = curvedLines
+      ? {
+          mode: "path",
+          pathId: "arc-grid-battery",
+          fallback: { mode: "line", x1: batteryNode.x, y1: batteryNode.y, x2: gridNode.x, y2: gridNode.y },
+          ctrlX: gridBatteryCtrlX,
+          ctrlY: gridBatteryCtrlY,
+        }
+      : { mode: "line", x1: batteryNode.x, y1: batteryNode.y, x2: gridNode.x, y2: gridNode.y };
+
     const geom = {
       // Grid → PV: right angle (horizontal then vertical), same anchors
       "pv-grid": {
@@ -1073,20 +1097,8 @@ class CompactPowerCard extends (window.LitElement ||
         fallback: { mode: "line", x1: batteryNode.x, y1: batteryHomeStartY, x2: batteryHomeEndX, y2: homeNode.y },
       },
 
-      "grid-battery": {
-        mode: "path",
-        pathId: "arc-grid-battery",
-        fallback: { mode: "line", x1: gridNode.x, y1: gridNode.y, x2: batteryNode.x, y2: batteryNode.y },
-        ctrlX: gridBatteryCtrlX,
-        ctrlY: gridBatteryCtrlY,
-      },
-      "battery-grid": {
-        mode: "path",
-        pathId: "arc-grid-battery",
-        fallback: { mode: "line", x1: batteryNode.x, y1: batteryNode.y, x2: gridNode.x, y2: gridNode.y },
-        ctrlX: gridBatteryCtrlX,
-        ctrlY: gridBatteryCtrlY,
-      },
+      "grid-battery": gridBatteryGeom,
+      "battery-grid": batteryGridGeom,
     };
 
     // Let flow dots follow the current drawn geometry (lines/paths) when updated.
@@ -1101,32 +1113,36 @@ class CompactPowerCard extends (window.LitElement ||
       false
     );
     geom["pv-home"] = parseLineGeom("line-pv-home", geom["pv-home"]);
-    geom["grid-battery"] = parsePathGeom(
-      "arc-grid-battery",
-      {
-        mode: "quad",
-        x0: gridNode.x,
-        y0: gridNode.y,
-        cx: gridBatteryCtrlX,
-        cy: gridBatteryCtrlY,
-        x1: batteryNode.x,
-        y1: batteryNode.y,
-      },
-      false
-    );
-    geom["battery-grid"] = parsePathGeom(
-      "arc-grid-battery",
-      {
-        mode: "quad",
-        x0: batteryNode.x,
-        y0: batteryNode.y,
-        cx: gridBatteryCtrlX,
-        cy: gridBatteryCtrlY,
-        x1: gridNode.x,
-        y1: gridNode.y,
-      },
-      true
-    );
+    geom["grid-battery"] = curvedLines
+      ? parsePathGeom(
+          "arc-grid-battery",
+          {
+            mode: "quad",
+            x0: gridNode.x,
+            y0: gridNode.y,
+            cx: gridBatteryCtrlX,
+            cy: gridBatteryCtrlY,
+            x1: batteryNode.x,
+            y1: batteryNode.y,
+          },
+          false
+        )
+      : gridBatteryGeom;
+    geom["battery-grid"] = curvedLines
+      ? parsePathGeom(
+          "arc-grid-battery",
+          {
+            mode: "quad",
+            x0: batteryNode.x,
+            y0: batteryNode.y,
+            cx: gridBatteryCtrlX,
+            cy: gridBatteryCtrlY,
+            x1: gridNode.x,
+            y1: gridNode.y,
+          },
+          true
+        )
+      : batteryGridGeom;
     geom["grid-home"] = parsePathGeom(
       "line-grid-home",
       { mode: "line", x1: gridNode.x, y1: gridHomeStartY, x2: gridHomeEndX, y2: homeNode.y },
@@ -1624,6 +1640,11 @@ class CompactPowerCard extends (window.LitElement ||
       : "mdi:battery";
 
     const batteryIconOpacity = 1;
+    const curvedLines = this._useCurvedLines();
+    const curveFactorRaw = Number(this._config?.curve_factor ?? 1);
+    const curveFactor = Math.min(5, Math.max(1, Number.isFinite(curveFactorRaw) ? curveFactorRaw : 1));
+    const curveScale = (curveFactor - 1) / 4; // 0 at factor 1, 1 at factor 5
+    const cornerBaseRadius = pvGridTurnRadius;
     const sourcePositions = [];
     const homeX = homeCenterX;
     const homeRowYBase = 145; // base Y for aux row; actual Y will be adjusted via pctHomeY
@@ -1848,6 +1869,46 @@ class CompactPowerCard extends (window.LitElement ||
     const batteryDetailsTopPx = batteryListAnchor + batteryDetailsOffsetPx;
 
 
+    const makeCornerPath = (startX, startY, endX, endY, sweepFlag, firstAxis = "H") => {
+      if (!curvedLines) return firstAxis === "H"
+        ? `M${startX} ${startY} H${endX} V${endY}`
+        : `M${startX} ${startY} V${endY} H${endX}`;
+
+      const spanX = Math.abs(endX - startX);
+      const spanY = Math.abs(endY - startY);
+      const cornerX = firstAxis === "H" ? endX : startX;
+      const cornerY = firstAxis === "H" ? startY : endY;
+
+      if (curveFactor >= 5) {
+        // Single smooth curve from start to end via the corner.
+        return `M${startX} ${startY} Q${cornerX} ${cornerY} ${endX} ${endY}`;
+      }
+
+      const maxInset = Math.min(spanX, spanY); // so inset never exceeds the shorter leg
+      const inset = cornerBaseRadius + (maxInset - cornerBaseRadius) * curveScale;
+      const r = inset;
+
+      if (firstAxis === "H") {
+        const horizEnd = endX > startX ? endX - inset : endX + inset;
+        const arcEndY = endY > startY ? startY + inset : startY - inset;
+        const sweep = sweepFlag; // 0 or 1
+        return `M${startX} ${startY} H${horizEnd} A${r} ${r} 0 0 ${sweep} ${endX} ${arcEndY} V${endY}`;
+      } else {
+        const vertEnd = endY > startY ? endY - inset : endY + inset;
+        const arcEndX = endX > startX ? startX + inset : startX - inset;
+        const sweep = sweepFlag;
+        return `M${startX} ${startY} V${vertEnd} A${r} ${r} 0 0 ${sweep} ${arcEndX} ${endY} H${endX}`;
+      }
+    };
+
+    const pvGridPath = makeCornerPath(gridLineStartX, gridPvStartY, pvGridEndX, pvNode.y, 0, "H");
+    const pvBatteryPath = makeCornerPath(pvBatteryStartX, pvNode.y, batteryNode.x, pvBatteryEndY, 0, "V");
+    const gridHomePath = makeCornerPath(gridNode.x, gridHomeStartY, gridHomeEndX, homeNode.y, 1, "H");
+    const batteryHomePath = makeCornerPath(batteryNode.x, batteryHomeStartY, batteryHomeEndX, homeNode.y, 0, "H");
+    const gridBatteryPath = curvedLines
+      ? `M${gridNode.x} ${gridNode.y} H${humpStartX} Q${humpCtrlInX} ${humpPeakY} ${homeCenterX} ${humpPeakY} Q${humpCtrlOutX} ${humpPeakY} ${humpEndX} ${gridNode.y} H${batteryNode.x}`
+      : `M${gridNode.x} ${gridNode.y} H${batteryNode.x}`;
+
     return html`
       <ha-card class="${[
         hasPv ? "" : "no-pv",
@@ -1859,19 +1920,14 @@ class CompactPowerCard extends (window.LitElement ||
           <svg viewBox="0 0 ${baseWidth} ${viewHeight}" preserveAspectRatio="xMidYMid meet">
 
           <!-- Flow lines, updated endpoints (straight lines) -->
-          <path id="line-pv-grid" class="flow-line" fill="none"
-                d="M${gridLineStartX} ${gridPvStartY} H${pvGridEndX - pvGridTurnRadius} A${pvGridTurnRadius} ${pvGridTurnRadius} 0 0 0 ${pvGridEndX} ${gridPvStartY - pvGridTurnRadius} V${pvNode.y}" />
+          <path id="line-pv-grid" class="flow-line" fill="none" d="${pvGridPath}" />
           <line id="line-pv-home" class="flow-line"
                 x1="${pvNode.x}" y1="${pvNode.y}" x2="${homeNode.x}" y2="${homeNode.y}" />
-          <path id="line-pv-battery" class="flow-line" fill="none"
-                d="M${pvBatteryStartX} ${pvNode.y} V${pvBatteryEndY - pvGridTurnRadius} A${pvGridTurnRadius} ${pvGridTurnRadius} 0 0 0 ${pvBatteryStartX + pvGridTurnRadius} ${pvBatteryEndY} H${batteryNode.x}" />
-          <path id="line-grid-home" class="flow-line" fill="none"
-                d="M${gridNode.x} ${gridHomeStartY} H${gridHomeEndX - pvGridTurnRadius} A${pvGridTurnRadius} ${pvGridTurnRadius} 0 0 1 ${gridHomeEndX} ${gridHomeStartY + pvGridTurnRadius} V${homeNode.y}" />
-          <path id="line-home-battery" class="flow-line" fill="none"
-                d="M${batteryNode.x} ${batteryHomeStartY} H${batteryHomeEndX + pvGridTurnRadius} A${pvGridTurnRadius} ${pvGridTurnRadius} 0 0 0 ${batteryHomeEndX} ${batteryHomeStartY + pvGridTurnRadius} V${homeNode.y}" />
+          <path id="line-pv-battery" class="flow-line" fill="none" d="${pvBatteryPath}" />
+          <path id="line-grid-home" class="flow-line" fill="none" d="${gridHomePath}" />
+          <path id="line-home-battery" class="flow-line" fill="none" d="${batteryHomePath}" />
           <circle id="dot-pv-home"      r="4" fill="${pvColor}" opacity="0" />
-          <path id="arc-grid-battery" class="flow-line" fill="none"
-                d="M${gridNode.x} ${gridNode.y} H${humpStartX} Q${humpCtrlInX} ${humpPeakY} ${homeCenterX} ${humpPeakY} Q${humpCtrlOutX} ${humpPeakY} ${humpEndX} ${gridNode.y} H${batteryNode.x}" />
+          <path id="arc-grid-battery" class="flow-line" fill="none" d="${gridBatteryPath}" />
 
           <!-- Remaining flow dots -->
           <circle id="dot-pv-grid"      r="4" fill="${pvColor}" opacity="0" />
