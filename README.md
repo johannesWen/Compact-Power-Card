@@ -153,6 +153,8 @@ entities:
 
 Devices are up to 8 power feeds within your home that you want to show in the card. By default, device power is not subtracted from the home power value. If you want that to happen, set the card-level `subtract_devices_from_home: true`.
 
+**Important:** Any entity can be used in the device section to show icon/label, but only entities with `device_class: power` will be subtracted from the home power if `subtract_devices_from_home: true`. In addition, only devices with `device_class: power` will show power flow lines in the devices section. 
+
 | Name                    | Setting slug                      | What it does                                                                     |
 | ----------------------- | --------------------------------- | -------------------------------------------------------------------------------- |
 | Device entity           | `entity`                | Sensor/entity id for a load.                                          |
@@ -183,11 +185,11 @@ Example below of how devices can be setup:
 
 ## Labels (per pv/grid/battery)
 
-Labels can be used to display "other" information - that can be more power stats, energy stats, weather, whatever you want. You can add two labels per main power source (e.g. Grid x2, PV x2, Battery x2) Note: these are just labels, they do not factor into the power diagram or calculations at all. 
+Labels can be used to display "other" information - that can be more power stats, energy stats, weather, whatever you want. You can add up to four PV labels and two grid labels (plus battery labels separately). Note: these are just labels, they do not factor into the power diagram or calculations at all. 
 
 | Name          | Setting slug                 | What it does                                                         |
 | ------------- | ---------------------------- | -------------------------------------------------------------------- |
-| Labels list   | `labels`                     | Array (max 2 for each) of label objects (supported in grid/pv).                                     |
+| Labels list   | `labels`                     | Array (max 4 for PV, max 2 for grid) of label objects.                                             |
 | Label entity  | `entity`            | Sensor/entity id for the label value.                                |
 | Label attribute | `attribute`       | Read from an attribute instead of state.                             |
 | Icon    | `icon`              | Optional icon shown next to the label.                               |
