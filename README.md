@@ -159,6 +159,7 @@ Devices are up to 8 power feeds within your home that you want to show in the ca
 | ----------------------- | --------------------------------- | -------------------------------------------------------------------------------- |
 | Device entity           | `entity`                | Sensor/entity id for a load.                                          |
 | Device attribute        | `attribute`             | Read from an attribute instead of state.                                         |
+| Switch Entity        | `switch_entity`             | Will toggle the on/off of the switch when pressing the icon/label.                                         |
 | Icon             | `icon`                  | Optional icon for the device badge.                                              |
 | Color            | `color`                 | Optional color override for that device.                                         |
 | Threshold        | `threshold`             | Dims/zeros device below threshold (in watts) (per `threshold_mode`).                        |
@@ -174,6 +175,7 @@ Example below of how devices can be setup:
       icon: mdi:car-electric
       threshold: 50
       color: "#FFFFFF"
+      switch_entity: switch.car_charger
     - entity: sensor.pool_pump_power
       icon: mdi:pool
       threshold: 50
