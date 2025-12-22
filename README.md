@@ -163,6 +163,7 @@ Devices are up to 8 power feeds within your home that you want to show in the ca
 | Icon             | `icon`                  | Optional icon for the device badge.                                              |
 | Color            | `color`                 | Optional color override for that device.                                         |
 | Threshold        | `threshold`             | Dims/zeros device below threshold (in watts) (per `threshold_mode`).                        |
+| Force hide under threshold | `force_hide_under_threshold` | If true, hides the device entirely when under threshold. Will hide at 0 W if no threshold set. |
 | Decimals         | `decimal_places`        | Decimal places for that device (defaults to card-level `decimal_places`).                                                  |
 | Unit of Measurement             | `unit` / `unit_of_measurement` | Converts `W` to `kW` if set to `kW`                    |
 
