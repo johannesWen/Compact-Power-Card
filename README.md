@@ -2,7 +2,8 @@
 
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/pacemaker82/compact-power-card/total?label=Total%20Downloads) ![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/pacemaker82/compact-power-card/latest/total?label=Latest%20Version)
 
-<img width="837" height="643" alt="Screenshot 2025-12-18 at 10 38 43" src="https://github.com/user-attachments/assets/e67d3f04-ac80-4506-ac43-fedd19e6dac2" />
+
+<img width="1042" height="641" alt="Image" src="https://github.com/user-attachments/assets/6d545c7f-903b-4323-b59c-a074d3404e73" />
 
 Inspired by the excellent [power flow card plus](https://github.com/flixlix/power-flow-card-plus) - A compact power card for Home Assistant that supports a tighter user experience, and 8 power devices/feeds from the home in a single card. In addition, the card can show 6 entity labels for whatever you want, colour and configure them how you need.
 
@@ -64,6 +65,7 @@ This card is designed for the new [Home Assistant Sections UI](https://www.home-
 | Show curved lines? | `curved_lines`| Set to `false` if you want a more straight-edge look. Default `true` |
 | Curved Line Radius | `curve_factor`| Adjusts the curve radius. `1` to `5`, `1` is default. Only works when `curved_lines: true` |
 | Device Power Lines | `show_device_power_lines`| Set to `true` to light up devices when power is flowing beyond a threshold. Default `false` |
+| Home Icon Gradient | `disable_home_gradient`| Set to `true` if you want the home icon to be a single colour. |
 
 ### Thresholds in detail
 
