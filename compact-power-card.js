@@ -98,7 +98,21 @@ class CompactPowerCard extends (window.LitElement ||
                       },                                         
                     ]
                   },
-                  { name: "invert_state_values", selector: { boolean: {} } },                              
+                  { name: "invert_state_values", selector: { boolean: {} } },  
+                  { name: "tap_action", 
+                    selector: { 
+                      select: {
+                        mode: "dropdown",
+                        options: ["more_info", "navigate"],
+                      }
+                    }
+                  },  
+                  {
+                    name: "navigation_path",
+                    selector: {
+                      text: {},
+                    },
+                  },                          
                   { name: "labels",
                     selector: {
                       object: {
@@ -166,6 +180,20 @@ class CompactPowerCard extends (window.LitElement ||
                     ]
                   },
                   { name: "invert_state_values", selector: { boolean: {} } },                              
+                  { name: "tap_action", 
+                    selector: { 
+                      select: {
+                        mode: "dropdown",
+                        options: ["more_info", "navigate"],
+                      }
+                    }
+                  },  
+                  {
+                    name: "navigation_path",
+                    selector: {
+                      text: {},
+                    },
+                  },  
                   { name: "labels",
                     selector: {
                       object: {
@@ -253,6 +281,19 @@ class CompactPowerCard extends (window.LitElement ||
                         label: "Colour",
                         selector: { text: {} },
                       },    
+                      tap_action: {
+                        label: "Tap Action",
+                        selector: { 
+                          select: {
+                            mode: "dropdown",
+                            options: ["more_info", "navigate"],
+                          }
+                        }
+                      },
+                      navigation_path: {
+                        label: "Navigation Path",
+                        selector: { text: {} },
+                      },
                       threshold: { 
                         label: "Power Threshold (in watts)",
                         selector: { number: { step: 1, } },
@@ -325,6 +366,20 @@ class CompactPowerCard extends (window.LitElement ||
                     ]
                   },
                   { name: "invert_state_values", selector: { boolean: {} } },                                      
+                  { name: "tap_action", 
+                    selector: { 
+                      select: {
+                        mode: "dropdown",
+                        options: ["more_info", "navigate"],
+                      }
+                    }
+                  },  
+                  {
+                    name: "navigation_path",
+                    selector: {
+                      text: {},
+                    },
+                  },  
                 ]
               },   
               { name: "devices",
@@ -1369,9 +1424,22 @@ class CompactPowerCard extends (window.LitElement ||
 
   _isLightTheme() {
     const theme = this.hass?.themes;
-    if (theme?.darkMode === false) return true;
+    const body = document?.body;
+    const root = document?.documentElement;
+    const hasDarkClass = body?.classList?.contains("theme-dark") || body?.classList?.contains("dark");
+    const hasLightClass = body?.classList?.contains("theme-light");
+    const dataTheme = String(root?.getAttribute("data-theme") || "").toLowerCase();
     if (theme?.darkMode === true) return false;
-    return document?.body?.classList?.contains("theme-light") || false;
+    if (theme?.darkMode === false && !hasDarkClass) return true;
+    if (hasDarkClass) return false;
+    if (hasLightClass) return true;
+    if (dataTheme.includes("dark")) return false;
+    if (dataTheme.includes("light")) return true;
+    const scheme = root ? getComputedStyle(root).getPropertyValue("color-scheme") : "";
+    if (scheme && scheme.includes("dark") && !scheme.includes("light")) return false;
+    const prefersDark = window?.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+    if (prefersDark) return false;
+    return false;
   }
 
   _formatEntity(entityId, decimals = 1, attribute = null, unitOverride = null) {
@@ -1697,14 +1765,30 @@ class CompactPowerCard extends (window.LitElement ||
       el.setAttribute("offset", clampPct(offset));
       el.setAttribute("stop-color", color);
     };
+    const setStops = (stops) => {
+      stops.forEach((s) => setStop(s.el, s.offset, s.color));
+    };
+    const getOffsetPct = (el) => {
+      const raw = el.getAttribute("offset") || "0";
+      const num = parseFloat(raw);
+      return Number.isFinite(num) ? num : 0;
+    };
 
     if (total <= 0) {
-      setStop(stop1, 0, homeColor);
-      setStop(stop2, 100, homeColor);
-      setStop(stop3, 100, homeColor);
-      setStop(stop4, 100, homeColor);
-      setStop(stop5, 100, homeColor);
-      setStop(stop6, 100, homeColor);
+      const homeMarker = this.shadowRoot?.querySelector(".home-marker");
+      if (homeMarker) {
+        homeMarker.style.setProperty("--cpc-home-glow-1", homeColor);
+        homeMarker.style.setProperty("--cpc-home-glow-2", homeColor);
+        homeMarker.style.setProperty("--cpc-home-glow-3", homeColor);
+      }
+      setStops([
+        { el: stop1, offset: 0, color: homeColor },
+        { el: stop2, offset: 100, color: homeColor },
+        { el: stop3, offset: 100, color: homeColor },
+        { el: stop4, offset: 100, color: homeColor },
+        { el: stop5, offset: 100, color: homeColor },
+        { el: stop6, offset: 100, color: homeColor },
+      ]);
       return;
     }
 
@@ -1713,36 +1797,65 @@ class CompactPowerCard extends (window.LitElement ||
     const color3 = entries[2]?.color || color2;
     const share1 = (entries[0]?.value / total) * 100;
     const share2 = entries.length >= 2 ? ((entries[0].value + entries[1].value) / total) * 100 : share1;
+    let targetStops = [];
+    const homeMarker = this.shadowRoot?.querySelector(".home-marker");
+    if (homeMarker) {
+      homeMarker.style.setProperty("--cpc-home-glow-1", color1);
+      homeMarker.style.setProperty("--cpc-home-glow-2", color2);
+      homeMarker.style.setProperty("--cpc-home-glow-3", color3);
+    }
 
     if (entries.length === 1) {
-      setStop(stop1, 0, color1);
-      setStop(stop2, 100, color1);
-      setStop(stop3, 100, color1);
-      setStop(stop4, 100, color1);
-      setStop(stop5, 100, color1);
-      setStop(stop6, 100, color1);
+      targetStops = [
+        { el: stop1, offset: 0, color: color1 },
+        { el: stop2, offset: 100, color: color1 },
+        { el: stop3, offset: 100, color: color1 },
+        { el: stop4, offset: 100, color: color1 },
+        { el: stop5, offset: 100, color: color1 },
+        { el: stop6, offset: 100, color: color1 },
+      ];
+      setStops(targetStops);
       return;
     }
 
     if (entries.length === 2) {
       const halfBlend = Math.min(blendWidth / 2, share1, 100 - share1);
-      setStop(stop1, 0, color1);
-      setStop(stop2, share1 - halfBlend, color1);
-      setStop(stop3, share1 + halfBlend, color2);
-      setStop(stop4, 100, color2);
-      setStop(stop5, 100, color2);
-      setStop(stop6, 100, color2);
-      return;
+      targetStops = [
+        { el: stop1, offset: 0, color: color1 },
+        { el: stop2, offset: share1 - halfBlend, color: color1 },
+        { el: stop3, offset: share1 + halfBlend, color: color2 },
+        { el: stop4, offset: 100, color: color2 },
+        { el: stop5, offset: 100, color: color2 },
+        { el: stop6, offset: 100, color: color2 },
+      ];
+    } else {
+      const halfBlend1 = Math.min(blendWidth / 2, share1, share2 - share1);
+      const halfBlend2 = Math.min(blendWidth / 2, 100 - share2, share2 - share1);
+      targetStops = [
+        { el: stop1, offset: 0, color: color1 },
+        { el: stop2, offset: share1 - halfBlend1, color: color1 },
+        { el: stop3, offset: share1 + halfBlend1, color: color2 },
+        { el: stop4, offset: share2 - halfBlend2, color: color2 },
+        { el: stop5, offset: share2 + halfBlend2, color: color3 },
+        { el: stop6, offset: 100, color: color3 },
+      ];
     }
 
-    const halfBlend1 = Math.min(blendWidth / 2, share1, share2 - share1);
-    const halfBlend2 = Math.min(blendWidth / 2, 100 - share2, share2 - share1);
-    setStop(stop1, 0, color1);
-    setStop(stop2, share1 - halfBlend1, color1);
-    setStop(stop3, share1 + halfBlend1, color2);
-    setStop(stop4, share2 - halfBlend2, color2);
-    setStop(stop5, share2 + halfBlend2, color3);
-    setStop(stop6, 100, color3);
+    const offsetChanged = targetStops.some(
+      (s) => Math.abs(getOffsetPct(s.el) - s.offset) > 0.5
+    );
+    if (offsetChanged) {
+      const dominant = color1;
+      [stop1, stop2, stop3, stop4, stop5, stop6].forEach((el) => {
+        el.setAttribute("stop-color", dominant);
+      });
+      if (this._homeGradientFrame) cancelAnimationFrame(this._homeGradientFrame);
+      this._homeGradientFrame = requestAnimationFrame(() => {
+        setStops(targetStops);
+      });
+      return;
+    }
+    setStops(targetStops);
   }
 
   _updateFlows() {
@@ -1862,17 +1975,13 @@ class CompactPowerCard extends (window.LitElement ||
     let homeEffectiveDisplay = 0;
     let homeEffectiveFlow = 0;
     if (hasHomeEntity) {
-      homeEffectiveFlow = Math.max(baseHome, 0);
       const adjustedHome = subtractFromHome ? baseHome - auxUsage : baseHome;
       homeEffectiveDisplay = Math.max(adjustedHome, 0);
+      homeEffectiveFlow = Math.max(inferredBase, 0);
     } else {
-      const homeReportedDisplay = Math.max(subtractFromHome ? baseHome - auxUsage : baseHome, 0);
       const inferredDisplay = Math.max(subtractFromHome ? inferredBase - auxUsage : inferredBase, 0);
-      homeEffectiveDisplay = Math.max(inferredDisplay, homeReportedDisplay);
-
-      const homeReportedFlow = Math.max(baseHome, 0);
-      const inferredFlow = Math.max(inferredBase, 0);
-      homeEffectiveFlow = Math.max(inferredFlow, homeReportedFlow);
+      homeEffectiveDisplay = inferredDisplay;
+      homeEffectiveFlow = Math.max(inferredBase, 0);
     }
     this._homeEffective = homeEffectiveDisplay;
     this._homeEffectiveUnit = "W";
@@ -2257,6 +2366,10 @@ class CompactPowerCard extends (window.LitElement ||
     if (existing && existing.active) {
       existing.geom = geom;
       existing.duration = duration;
+      if (geom?.mode === "path") {
+        existing.pathEl = null;
+        existing.pathLength = 0;
+      }
       return;
     }
 
@@ -2301,7 +2414,14 @@ class CompactPowerCard extends (window.LitElement ||
       } else if (animState.geom.mode === "path") {
         if (!animState.pathEl) {
           animState.pathEl = this.shadowRoot?.getElementById(animState.geom.pathId);
+          animState.pathD = animState.pathEl?.getAttribute?.("d") || null;
           animState.pathLength = animState.pathEl?.getTotalLength?.() || 0;
+        } else {
+          const nextD = animState.pathEl.getAttribute?.("d") || null;
+          if (nextD && nextD !== animState.pathD) {
+            animState.pathD = nextD;
+            animState.pathLength = animState.pathEl.getTotalLength?.() || 0;
+          }
         }
         if (animState.pathEl && animState.pathLength > 0) {
           const pos = animState.geom.reverse ? 1 - t : t;
@@ -2355,6 +2475,28 @@ class CompactPowerCard extends (window.LitElement ||
     this.dispatchEvent(ev);
   }
 
+  _navigate(path) {
+    if (!path) return;
+    if (this.hass?.navigate) {
+      this.hass.navigate(path);
+      return;
+    }
+    history.pushState(null, "", path);
+    window.dispatchEvent(new Event("location-changed", { bubbles: true, composed: true }));
+  }
+
+  _handleTapAction(cfg, entityId) {
+    const action = String(cfg?.tap_action || "more_info").toLowerCase();
+    if (action === "navigate") {
+      const path = cfg?.navigation_path || cfg?.navigationPath || null;
+      if (path) {
+        this._navigate(path);
+        return;
+      }
+    }
+    this._openMoreInfo(entityId);
+  }
+
   _toggleEntity(entityId) {
     if (!entityId || !this.hass) return;
     const [domain] = String(entityId).split(".");
@@ -2398,6 +2540,11 @@ class CompactPowerCard extends (window.LitElement ||
     const batteryLabels = this._normalizeLabels(batteryLabelsSource);
     const { sources: normalizedSources } = this._getSourcesConfig();
     const enableDevicePowerLines = this._useDevicePowerLines();
+    const homeGlowOpacity = this._isLightTheme() ? 0 : 0.3;
+    const homeTapAction = String(homeCfg?.tap_action || "more_info").toLowerCase();
+    const homeNavigatePath = homeCfg?.navigation_path || homeCfg?.navigationPath || null;
+    const homeCanNavigate = homeTapAction === "navigate" && Boolean(homeNavigatePath);
+    const homeClickable = Boolean(homeCfg?.entity) || homeCanNavigate;
     const designWidth = 512;
     const designHeight = 184;
     const defaultWidth = 512;
@@ -3040,6 +3187,7 @@ class CompactPowerCard extends (window.LitElement ||
               const arrow =
                 numericW > 0 ? "mdi:arrow-left" : numericW < 0 ? "mdi:arrow-right" : null;
               return {
+                cfg,
                 entity,
                 icon,
                 color,
@@ -3166,7 +3314,7 @@ class CompactPowerCard extends (window.LitElement ||
               : ""}
             ${!pvInBatterySlot || pvLabels.length
               ? html`<div class="overlay-item pv-section pv-section-top" style="left:${(sx(256)/baseWidth)*100}%; top:${pctBaseY(24)}%;">
-                  <div class="node-marker pv-marker clickable" @click=${() => this._openMoreInfo(pvCfg.entity)}>
+                  <div class="node-marker pv-marker clickable" @click=${() => this._handleTapAction(pvCfg, pvCfg.entity)}>
                     ${pvInBatterySlot
                       ? ""
                       : html`<div
@@ -3181,7 +3329,7 @@ class CompactPowerCard extends (window.LitElement ||
               : ""}
             ${pvInBatterySlot
               ? html`<div class="overlay-item anchor-right pv-section pv-section-battery" style="left:${(batteryIconX/baseWidth)*100}%; top:${batteryIconTop}px;">
-                  <div class="node-marker pv-marker right clickable" @click=${() => this._openMoreInfo(pvCfg.entity)}>
+                  <div class="node-marker pv-marker right clickable" @click=${() => this._handleTapAction(pvCfg, pvCfg.entity)}>
                     <ha-icon icon="mdi:solar-panel" style="color:${pvColor}; opacity:1; filter:${!this._isLightTheme() && pvNumeric !== 0 ? `drop-shadow(0 0 10px ${pvColor})` : "none"};"></ha-icon>
                     <div
                       class="node-label right ${pvLabelFlicker ? "label-flicker" : ""}"
@@ -3193,7 +3341,7 @@ class CompactPowerCard extends (window.LitElement ||
                 </div>`
               : ""}
             <div class="overlay-item anchor-left" style="left:${(gridIconX/baseWidth)*100}%; top:${gridIconTop}px;">
-              <div class="node-marker grid-marker left clickable" @click=${() => this._openMoreInfo(gridCfg.entity)}>
+              <div class="node-marker grid-marker left clickable" @click=${() => this._handleTapAction(gridCfg, gridCfg.entity)}>
                 <ha-icon icon="mdi:transmission-tower" style="color:${gridColor}; opacity:1; filter:${!this._isLightTheme() && gridNumeric !== 0 ? `drop-shadow(0 0 10px ${gridColor})` : "none"};"></ha-icon>
                 <div
                   class="node-label left ${gridLabelFlicker ? "label-flicker" : ""}"
@@ -3208,12 +3356,12 @@ class CompactPowerCard extends (window.LitElement ||
             </div>
             <div class="overlay-item" style="left:${(homeCenterX/baseWidth)*100}%; top:${pctHomeY(135)}%;">
               <div
-                class="home-marker ${homeCfg?.entity ? "clickable" : ""}"
+                class="home-marker ${homeClickable ? "clickable" : ""}"
                 @click=${() => {
-                  if (homeCfg?.entity) this._openMoreInfo(homeCfg.entity);
+                  if (homeClickable) this._handleTapAction(homeCfg, homeCfg.entity);
                 }}
               >
-                <svg class="home-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <svg class="home-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="overflow: visible;">
                   <defs>
                     <linearGradient id="home-gradient" gradientUnits="userSpaceOnUse" x1="7" y1="7" x2="19" y2="20">
                       <stop id="home-stop-1" offset="0%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
@@ -3223,8 +3371,21 @@ class CompactPowerCard extends (window.LitElement ||
                       <stop id="home-stop-5" offset="100%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
                       <stop id="home-stop-6" offset="100%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
                     </linearGradient>
+                    <filter id="home-glow-blur" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur stdDeviation="2.5" />
+                    </filter>
                   </defs>
                   <title>home</title>
+                  <path
+                    fill="none"
+                    stroke="${this._config?.disable_home_gradient ? homeColor : "url(#home-gradient)"}"
+                    stroke-width="5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    opacity="${homeGlowOpacity}"
+                    filter="url(#home-glow-blur)"
+                    d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"
+                  ></path>
                   <path fill="${this._config?.disable_home_gradient ? homeColor : "url(#home-gradient)"}" d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"></path>
                 </svg>
                 <div class="home-label" style="color:${homeColor}; opacity:${homeLabelHidden ? 0.35 : homeOpacity};">${renderValue(homeVal)}</div>
@@ -3238,7 +3399,7 @@ class CompactPowerCard extends (window.LitElement ||
             ${hasBattery
               ? html`<div class="overlay-item anchor-right battery-section" style="left:${(batteryIconX/baseWidth)*100}%; top:${batteryIconTop}px;">
                   <div class="node-marker battery-marker right ${batteryDetails.length ? "" : "clickable"}" @click=${() => {
-                    if (!batteryDetails.length) this._openMoreInfo(batteryCfg.entity);
+                    if (!batteryDetails.length) this._handleTapAction(batteryCfg, batteryCfg.entity);
                   }}>
                     <ha-icon icon="${batteryIcon}" style="color:${batteryColor}; opacity:${batteryIconOpacity}; filter:${!this._isLightTheme() && battNumericW !== 0 ? `drop-shadow(0 0 10px ${batteryColor})` : "none"};"></ha-icon>
                     <div
@@ -3260,7 +3421,7 @@ class CompactPowerCard extends (window.LitElement ||
                       (b) => html`<div
                         class="battery-multi-item clickable"
                         style="margin-top: -6px; color:${b.color};"
-                        @click=${() => this._openMoreInfo(b.entity)}
+                        @click=${() => this._handleTapAction(b.cfg, b.entity)}
                       >
                         <div class="aux-label" style="padding-top: 0px; padding-bottom: 0px; margin-top: 4px; padding-left: 1px; padding-right: 1px; opacity:${b.hidden ? 0.35 : b.opacity};">
                           ${b.arrow && !b.hidden

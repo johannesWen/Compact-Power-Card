@@ -99,6 +99,8 @@ Common keys for `pv`, `grid`, `home`, `battery`. The following settings are poss
 | Decimals            | `decimal_places`        | Number of decimals to display (defaults to card-level `decimal_places`, or 1).                                      |
 | Unit override       | `unit` / `unit_of_measurement` | Converts `W` to `kW` if set to `kW`         |
 | Invert state values | `invert_state_values`   | Flip sign of grid/battery readings (e.g., import/export, charge/discharge).     |
+| Tap Action | `tap_action`   | Set to `more-info` or `navigate`. `navigate` requires a `navigation_path`. Default behaviour is `more-info`     |
+| Navigation Path | `navigation_path`   | Used with `tap_action: navigate`. Set to a local path to go to a dashboard, e.g. `/my-dashboard/page`     |
 
 **Battery only:**
 
@@ -149,7 +151,7 @@ entities:
 ```
 
 ### Home specific
-- If `home` is provided, the card uses its value (minus any device sensor power usage); if omitted, home is inferred from pv/grid/battery power, minus any device power. (see devices below for more)
+- If `home` entity is provided, the card displays its raw value (minus any device sensor power usage if applicable), but it will not consider its value in any other power calculations. If the entity is omitted, home is inferred from pv/grid/battery power, minus any device power (if applicable). See devices below for more on including their power in the home calculation.
 
 ## Devices
 
