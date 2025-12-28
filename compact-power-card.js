@@ -64,6 +64,10 @@ class CompactPowerCard extends (window.LitElement ||
                 name: "disable_home_gradient",
                 selector: { boolean: {} },
               },
+              {
+                name: "remove_glow_effects",
+                selector: { boolean: {} },
+              },
           ]
         },       
         {
@@ -444,6 +448,7 @@ class CompactPowerCard extends (window.LitElement ||
       computeLabel: (schema) => {
         if (schema.name === "help_text") return "Settings Coming Soon";
         if (schema.name === "curved_lines") return "Use Curved Lines?";
+        if (schema.name === "remove_glow_effects") return "Remove Glow Effects in Dark Mode?";
         if (schema.name === "battery") return "Batteries";
         if (schema.id === "grid-entity") return "Grid Power Entity";
         if (schema.id === "power-threshold") return "Power Threshold (in watts)";
@@ -1070,7 +1075,7 @@ class CompactPowerCard extends (window.LitElement ||
       path.setAttribute("vector-effect", "non-scaling-stroke");
       if (ln.dashed && !flicker) {
         path.setAttribute("stroke-dasharray", "1 3");
-      } else if (!this._isLightTheme()) {
+      } else if (this._allowGlowEffects()) {
         path.style.filter = `drop-shadow(0 0 6px ${ln.color})`;
       }
       group.appendChild(path);
@@ -1359,6 +1364,11 @@ class CompactPowerCard extends (window.LitElement ||
     return this._coerceBoolean(this._config?.enable_device_power_lines, false);
   }
 
+  _allowGlowEffects() {
+    if (this._isLightTheme()) return false;
+    return !this._coerceBoolean(this._config?.remove_glow_effects, false);
+  }
+
   _getSourcesConfig() {
     // Prefer new `devices` key; fall back to legacy `sources` for backwards compatibility.
     const raw =
@@ -1449,10 +1459,10 @@ class CompactPowerCard extends (window.LitElement ||
     const s = attribute ? obj.attributes?.[attribute] : obj.state;
     const u = obj.attributes.unit_of_measurement;
     if (unitOverride) {
-      const num = parseFloat(s);
+      const num = this._parseNumberStrict(s);
       const uo = String(unitOverride || "").toLowerCase();
       const dec = uo === "w" ? 0 : decimals;
-      if (Number.isFinite(num)) {
+      if (num != null) {
         if (["w", "kw", "mw"].includes(uo)) {
           const watts = this._toWatts(num, u);
           const factor = uo === "kw" ? 1 / 1000 : uo === "mw" ? 1 / 1000000 : 1;
@@ -1464,16 +1474,16 @@ class CompactPowerCard extends (window.LitElement ||
       return `${s} ${unitOverride}`;
     }
     if (s === "unknown" || s === "unavailable") return s;
-    const num = parseFloat(s);
+    const num = this._parseNumberStrict(s);
     const uLower = typeof u === "string" ? u.toLowerCase() : "";
     const decimalsToUse = uLower === "w" ? 0 : decimals;
     // Auto convert kWh → MWh when large
-    if (Number.isFinite(num) && uLower === "kwh" && Math.abs(num) >= 1000) {
+    if (num != null && uLower === "kwh" && Math.abs(num) >= 1000) {
       const mwh = num / 1000;
       return `${mwh.toFixed(decimals)} MWh`;
     }
     if (this._isWattToKw(num, u)) return this._formatPower(num, u, decimals);
-    if (Number.isFinite(num)) {
+    if (num != null) {
       if (u) return `${num.toFixed(decimalsToUse)} ${u}`;
       return num.toFixed(decimalsToUse);
     }
@@ -1632,6 +1642,16 @@ class CompactPowerCard extends (window.LitElement ||
     return Number.isFinite(n) ? n : null;
   }
 
+  _parseNumberStrict(val) {
+    if (typeof val === "number") return Number.isFinite(val) ? val : null;
+    if (typeof val !== "string") return null;
+    const s = val.trim();
+    if (!s) return null;
+    if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(s)) return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  }
+
   _parseDecimalPlaces(val) {
     const n = typeof val === "string" ? parseInt(val, 10) : val;
     if (!Number.isFinite(n) || n < 0) return null;
@@ -1673,8 +1693,8 @@ class CompactPowerCard extends (window.LitElement ||
     const st = this.hass.states[entityId];
     if (!st) return 0;
     const raw = attribute ? st.attributes?.[attribute] : st.state;
-    const v = parseFloat(raw);
-    return Number.isNaN(v) ? 0 : v;
+    const v = this._parseNumberStrict(raw);
+    return v == null ? 0 : v;
   }
 
   _getPowerMeta(entityId, unitOverride = null, attribute = null) {
@@ -1691,7 +1711,7 @@ class CompactPowerCard extends (window.LitElement ||
     if (!el) return;
     el.style.stroke = color;
     el.style.strokeOpacity = active ? "1" : "0.15";
-    const allowGlow = !this._isLightTheme();
+    const allowGlow = this._allowGlowEffects();
     el.style.filter = active && allowGlow ? `drop-shadow(0 0 6px ${color})` : "none";
   }
 
@@ -2540,7 +2560,8 @@ class CompactPowerCard extends (window.LitElement ||
     const batteryLabels = this._normalizeLabels(batteryLabelsSource);
     const { sources: normalizedSources } = this._getSourcesConfig();
     const enableDevicePowerLines = this._useDevicePowerLines();
-    const homeGlowOpacity = this._isLightTheme() ? 0 : 0.3;
+    const allowGlow = this._allowGlowEffects();
+    const homeGlowOpacity = allowGlow ? 0.3 : 0;
     const homeTapAction = String(homeCfg?.tap_action || "more_info").toLowerCase();
     const homeNavigatePath = homeCfg?.navigation_path || homeCfg?.navigationPath || null;
     const homeCanNavigate = homeTapAction === "navigate" && Boolean(homeNavigatePath);
@@ -2678,7 +2699,7 @@ class CompactPowerCard extends (window.LitElement ||
     );
     const renderValue = (text) => {
       if (!text) return text;
-      const m = /^([+-]?\d[\d.,]*)(.*)$/.exec(text);
+      const m = /^([+-]?\d[\d.,]*)(\s+.+)?$/.exec(String(text));
       if (!m) return text;
       const num = m[1];
       const rest = m[2] || "";
@@ -3286,7 +3307,7 @@ class CompactPowerCard extends (window.LitElement ||
             ${pvLabelItems.map(
               (lbl) => html`<div class="overlay-item" style="left:${lbl.leftPct}%; top:${lbl.topPct}%;">
                 <div class="aux-marker pv-label-marker clickable" @click=${() => this._openMoreInfo(lbl.entity || null)}>
-                  <ha-icon icon="${lbl.icon}" style="gap: 0px; color:${lbl.color}; opacity:1; --mdc-icon-size: calc(18px * var(--cpc-scale, 1)); filter:${!this._isLightTheme() && lbl.numeric !== 0 ? `drop-shadow(0 0 8px ${lbl.color})` : "none"};"></ha-icon>
+                <ha-icon icon="${lbl.icon}" style="gap: 0px; color:${lbl.color}; opacity:1; --mdc-icon-size: calc(18px * var(--cpc-scale, 1)); filter:${allowGlow && lbl.numeric !== 0 ? `drop-shadow(0 0 8px ${lbl.color})` : "none"};"></ha-icon>
                   <div class="aux-label" style="margin-top: -6px; padding-bottom: 0px; color:${lbl.color}; opacity:${lbl.hidden ? 0.35 : lbl.opacity};">${renderValue(lbl.val)}</div>
                   ${showPvLabelNames && lbl.name
                     ? html`<div class="aux-sub-label" style="color:${lbl.color}; opacity:${lbl.hidden ? 0.35 : lbl.opacity};">${lbl.name}</div>`
@@ -3297,7 +3318,7 @@ class CompactPowerCard extends (window.LitElement ||
             ${gridLabelItems.map(
               (lbl) => html`<div class="overlay-item anchor-left" style="left:${lbl.xPct}%; top:${lbl.yPx}px;">
                 <div class="aux-marker clickable" style="flex-direction: row; gap: 4px;" @click=${() => this._openMoreInfo(lbl.entity || null)}>
-                  <ha-icon icon="${lbl.icon}" style="color:${lbl.color}; opacity:1; --mdc-icon-size: calc(16px * var(--cpc-scale, 1)); filter:${!this._isLightTheme() && lbl.numeric !== 0 ? `drop-shadow(0 0 8px ${lbl.color})` : "none"};"></ha-icon>
+                  <ha-icon icon="${lbl.icon}" style="color:${lbl.color}; opacity:1; --mdc-icon-size: calc(16px * var(--cpc-scale, 1)); filter:${allowGlow && lbl.numeric !== 0 ? `drop-shadow(0 0 8px ${lbl.color})` : "none"};"></ha-icon>
                   <div class="aux-label" style="color:${lbl.color}; opacity:${lbl.hidden ? 0.35 : lbl.opacity};">${renderValue(lbl.val)}</div>
                 </div>
               </div>`
@@ -3307,7 +3328,7 @@ class CompactPowerCard extends (window.LitElement ||
                   (lbl) => html`<div class="overlay-item anchor-right battery-label" style="margin-right: 10px; left:${lbl.xPct}%; top:${lbl.yPx}px;">
                     <div class="aux-marker clickable" style="flex-direction: row; gap: 4px;" @click=${() => this._openMoreInfo(lbl.entity || null)}>
                       <div class="aux-label" style="color:${lbl.color}; opacity:${lbl.hidden ? 0.35 : lbl.opacity};">${renderValue(lbl.val)}</div>
-                      <ha-icon icon="${lbl.icon}" style="color:${lbl.color}; opacity:1; --mdc-icon-size: calc(16px * var(--cpc-scale, 1)); filter:${!this._isLightTheme() && lbl.numeric !== 0 ? `drop-shadow(0 0 8px ${lbl.color})` : "none"};"></ha-icon>
+                      <ha-icon icon="${lbl.icon}" style="color:${lbl.color}; opacity:1; --mdc-icon-size: calc(16px * var(--cpc-scale, 1)); filter:${allowGlow && lbl.numeric !== 0 ? `drop-shadow(0 0 8px ${lbl.color})` : "none"};"></ha-icon>
                     </div>
                   </div>`
                 )
@@ -3323,14 +3344,14 @@ class CompactPowerCard extends (window.LitElement ||
                         >
                           <span>${renderValue(pvVal)}</span>
                         </div>`}
-                    <ha-icon icon="mdi:solar-panel" style="color:${pvColor}; opacity:${pvInBatterySlot ? 0.5 : 1}; filter:${!this._isLightTheme() && pvNumeric !== 0 ? `drop-shadow(0 0 10px ${pvColor})` : "none"};"></ha-icon>
+                    <ha-icon icon="mdi:solar-panel" style="color:${pvColor}; opacity:${pvInBatterySlot ? 0.5 : 1}; filter:${allowGlow && pvNumeric !== 0 ? `drop-shadow(0 0 10px ${pvColor})` : "none"};"></ha-icon>
                   </div>
                 </div>`
               : ""}
             ${pvInBatterySlot
               ? html`<div class="overlay-item anchor-right pv-section pv-section-battery" style="left:${(batteryIconX/baseWidth)*100}%; top:${batteryIconTop}px;">
                   <div class="node-marker pv-marker right clickable" @click=${() => this._handleTapAction(pvCfg, pvCfg.entity)}>
-                    <ha-icon icon="mdi:solar-panel" style="color:${pvColor}; opacity:1; filter:${!this._isLightTheme() && pvNumeric !== 0 ? `drop-shadow(0 0 10px ${pvColor})` : "none"};"></ha-icon>
+                    <ha-icon icon="mdi:solar-panel" style="color:${pvColor}; opacity:1; filter:${allowGlow && pvNumeric !== 0 ? `drop-shadow(0 0 10px ${pvColor})` : "none"};"></ha-icon>
                     <div
                       class="node-label right ${pvLabelFlicker ? "label-flicker" : ""}"
                       style="color:${pvColor}; --label-opacity:${pvLabelHidden ? 0.35 : pvOpacity}; opacity: var(--label-opacity);"
@@ -3342,7 +3363,7 @@ class CompactPowerCard extends (window.LitElement ||
               : ""}
             <div class="overlay-item anchor-left" style="left:${(gridIconX/baseWidth)*100}%; top:${gridIconTop}px;">
               <div class="node-marker grid-marker left clickable" @click=${() => this._handleTapAction(gridCfg, gridCfg.entity)}>
-                <ha-icon icon="mdi:transmission-tower" style="color:${gridColor}; opacity:1; filter:${!this._isLightTheme() && gridNumeric !== 0 ? `drop-shadow(0 0 10px ${gridColor})` : "none"};"></ha-icon>
+                <ha-icon icon="mdi:transmission-tower" style="color:${gridColor}; opacity:1; filter:${allowGlow && gridNumeric !== 0 ? `drop-shadow(0 0 10px ${gridColor})` : "none"};"></ha-icon>
                 <div
                   class="node-label left ${gridLabelFlicker ? "label-flicker" : ""}"
                   style="color:${gridColor}; --label-opacity:${gridLabelHidden ? 0.35 : gridOpacity}; opacity: var(--label-opacity);"
@@ -3383,7 +3404,7 @@ class CompactPowerCard extends (window.LitElement ||
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     opacity="${homeGlowOpacity}"
-                    filter="url(#home-glow-blur)"
+                    filter="${allowGlow ? "url(#home-glow-blur)" : "none"}"
                     d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"
                   ></path>
                   <path fill="${this._config?.disable_home_gradient ? homeColor : "url(#home-gradient)"}" d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"></path>
@@ -3401,7 +3422,7 @@ class CompactPowerCard extends (window.LitElement ||
                   <div class="node-marker battery-marker right ${batteryDetails.length ? "" : "clickable"}" @click=${() => {
                     if (!batteryDetails.length) this._handleTapAction(batteryCfg, batteryCfg.entity);
                   }}>
-                    <ha-icon icon="${batteryIcon}" style="color:${batteryColor}; opacity:${batteryIconOpacity}; filter:${!this._isLightTheme() && battNumericW !== 0 ? `drop-shadow(0 0 10px ${batteryColor})` : "none"};"></ha-icon>
+                    <ha-icon icon="${batteryIcon}" style="color:${batteryColor}; opacity:${batteryIconOpacity}; filter:${allowGlow && battNumericW !== 0 ? `drop-shadow(0 0 10px ${batteryColor})` : "none"};"></ha-icon>
                     <div
                       class="node-label right ${batteryLabelFlicker ? "label-flicker" : ""}"
                       style="color:${batteryColor}; --label-opacity:${batteryLabelHidden ? 0.35 : batteryLabelOpacity}; opacity: var(--label-opacity);"
@@ -3455,7 +3476,7 @@ class CompactPowerCard extends (window.LitElement ||
                   >
                     <ha-icon
                       icon="${src.icon}"
-                      style="color:${src.color}; opacity:1; filter:${!this._isLightTheme() && src.numeric !== 0 ? `drop-shadow(0 0 10px ${src.color})` : "none"};"
+                      style="color:${src.color}; opacity:1; filter:${allowGlow && src.numeric !== 0 ? `drop-shadow(0 0 10px ${src.color})` : "none"};"
                     ></ha-icon>
                   </span>
                   <div

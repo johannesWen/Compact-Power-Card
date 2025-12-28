@@ -4,12 +4,12 @@
 
 <img width="1043" height="640" alt="Screenshot 2025-12-24 at 07 39 40" src="https://github.com/user-attachments/assets/583dde65-2885-4cfb-8db0-d91a9ec7c580" />
 
-Inspired by the excellent [power flow card plus](https://github.com/flixlix/power-flow-card-plus) - A compact power card for Home Assistant that supports a tighter user experience, and 8 power devices/feeds from the home in a single card. In addition, the card can show 6 entity labels for whatever you want, colour and configure them how you need.
+Inspired by the excellent [power flow card plus](https://github.com/flixlix/power-flow-card-plus) - A compact power card for Home Assistant that supports a tighter user experience, and 8 power devices/feeds from the home in a single card. In addition, the card can show up to 8 entity labels for whatever you want, colour and configure them how you need.
 
 ## Functionality
 
 - Up to 8 device power entities for the home that can help calculate the rest of home usage
-- Up to 6 additional state labels to show related info, like battery %, grid voltage, PV energy or whatever you want.
+- Up to 8 additional state labels to show related info, like battery %, grid voltage, PV energy or whatever you want.
 - Thresholds can be set on entities to fade out the entity label below the threshold.
 - Home power is calculated by default based on the grid/power/battery. Alternatively, use a home power sensor.
 - Home icon dynamically changes colour based on the power provided to it.
@@ -66,6 +66,7 @@ This card is designed for the new [Home Assistant Sections UI](https://www.home-
 | Curved Line Radius | `curve_factor`| Adjusts the curve radius. `1` to `5`, `1` is default. Only works when `curved_lines: true` |
 | Device Power Lines | `show_device_power_lines`| Set to `true` to light up devices when power is flowing beyond a threshold. Default `false` |
 | Home Icon Gradient | `disable_home_gradient`| Set to `true` if you want the home icon to be a single colour. |
+| Remove Glow Effects | `remove_glow_effects`| Set to `true` to disable drop shadow/glow effects. Default `false` (dark mode only). |
 
 ### Thresholds in detail
 
