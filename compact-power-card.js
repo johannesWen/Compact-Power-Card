@@ -508,6 +508,8 @@ class CompactPowerCard extends (window.LitElement ||
     this._trackedEntityIds = new Set();
     this._lastEntityStates = new Map();
     this._lastThemeMode = null;
+    this._iconPathCache = new Map();
+    this._iconPathPending = new Set();
     this._pendingFlowUpdate = false;
     this._lastFlowLayoutKey = null;
     this._layoutReady = false;
@@ -759,9 +761,18 @@ class CompactPowerCard extends (window.LitElement ||
         user-select: none;
       }
 
-      .home-marker svg {
+      .home-icon-wrap {
+        position: relative;
         width: calc(60px * var(--cpc-scale, 1));
         height: calc(60px * var(--cpc-scale, 1));
+      }
+
+
+      .home-icon {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        height: 100%;
         display: block;
         filter: none;
       }
@@ -923,12 +934,32 @@ class CompactPowerCard extends (window.LitElement ||
         transform: translate(-100%, 0);
       }
 
-      :host(.no-pv):not(.has-pv-labels) .canvas,
-      ha-card.no-pv:not(.has-pv-labels) .canvas,
-      :host(.no-battery):not(.has-pv-labels) .canvas,
-      ha-card.no-battery:not(.has-pv-labels) .canvas {
+      :host(.no-pv) .canvas,
+      ha-card.no-pv .canvas,
+      :host(.no-battery) .canvas,
+      ha-card.no-battery .canvas {
         margin-top: -20px;
+        margin-bottom: 0px;
       }
+
+      :host(.no-pv):not(.has-pv-labels):not(.has-grid-labels):not(.has-battery-labels) .canvas,
+      ha-card.no-pv:not(.has-pv-labels):not(.has-grid-labels):not(.has-battery-labels) .canvas,
+      :host(.no-battery):not(.has-pv-labels):not(.has-grid-labels):not(.has-battery-labels) .canvas,
+      ha-card.no-battery:not(.has-pv-labels):not(.has-grid-labels):not(.has-battery-labels) .canvas {
+        margin-top: -40px;
+        margin-bottom: 0px;
+      }
+
+      :host(.no-pv),
+      :host(.no-battery) {
+        height: auto;
+      }
+
+      ha-card.no-pv,
+      ha-card.no-battery {
+        height: auto;
+      }
+
 
       :host(.no-battery) #line-pv-battery,
       :host(.no-battery) #line-home-battery,
@@ -949,6 +980,11 @@ class CompactPowerCard extends (window.LitElement ||
       ha-card.no-battery .battery-section,
       ha-card.no-battery .battery-label {
         display: none;
+      }
+
+      :host(.pv-as-battery) .battery-label,
+      ha-card.pv-as-battery .battery-label {
+        display: block;
       }
 
       :host(.pv-as-battery) #line-home-battery,
@@ -1569,6 +1605,111 @@ class CompactPowerCard extends (window.LitElement ||
     return this._getEntityIcon(entityId, fallback);
   }
 
+  _getMdiPath(icon) {
+    if (!icon) return null;
+    const cached = this._iconPathCache?.get(icon);
+    if (cached) return cached;
+    const parts = String(icon).split(":");
+    const set = parts[0];
+    const name = parts[1];
+    if (!set || !name) return null;
+    const registry = window.customIcons?.[set];
+    const getIcon = registry?.getIcon;
+    if (typeof getIcon !== "function") {
+      const fallback = this._getMdiFallbackPath(set, name);
+      if (fallback) {
+        if (!this._iconPathCache) this._iconPathCache = new Map();
+        this._iconPathCache.set(icon, fallback);
+        return fallback;
+      }
+      this._queueHaIconPath(icon);
+      return null;
+    }
+    const iconResult = getIcon(name);
+    if (!iconResult) return null;
+    if (typeof iconResult.then === "function") {
+      iconResult
+        .then((resolved) => {
+          const path = this._extractIconPath(resolved);
+          if (path) {
+            if (!this._iconPathCache) this._iconPathCache = new Map();
+            this._iconPathCache.set(icon, path);
+            this.requestUpdate();
+          }
+        })
+        .catch(() => {});
+      return null;
+    }
+    const path = this._extractIconPath(iconResult) || this._getMdiFallbackPath(set, name);
+    if (path) {
+      if (!this._iconPathCache) this._iconPathCache = new Map();
+      this._iconPathCache.set(icon, path);
+      return path;
+    }
+    this._queueHaIconPath(icon);
+    return null;
+  }
+
+  _getMdiFallbackPath(set, name) {
+    if (set !== "mdi" || !name) return null;
+    const mdiIcons = window.mdiIcons || window.MDI_ICONS || window.mdiSvgPaths || null;
+    if (!mdiIcons) return null;
+    if (typeof mdiIcons[name] === "string") return mdiIcons[name];
+    const camel = name
+      .split("-")
+      .map((part, idx) => (idx === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+      .join("");
+    const key = `mdi${camel.charAt(0).toUpperCase()}${camel.slice(1)}`;
+    if (typeof mdiIcons[key] === "string") return mdiIcons[key];
+    return null;
+  }
+
+  _extractIconPath(iconResult) {
+    if (!iconResult) return null;
+    if (typeof iconResult === "string") return iconResult;
+    if (typeof iconResult.path === "string") return iconResult.path;
+    if (Array.isArray(iconResult.path)) return iconResult.path.join(" ");
+    if (typeof iconResult.body === "string") {
+      const m = iconResult.body.match(/d="([^"]+)"/);
+      if (m) return m[1];
+    }
+    return null;
+  }
+
+  _queueHaIconPath(icon) {
+    if (!icon || !this.shadowRoot) return;
+    if (!this._iconPathPending) this._iconPathPending = new Set();
+    if (this._iconPathPending.has(icon)) return;
+    this._iconPathPending.add(icon);
+    requestAnimationFrame(async () => {
+      try {
+        if (this.updateComplete) await this.updateComplete;
+        await customElements.whenDefined("ha-icon");
+        const container = this.shadowRoot?.getElementById("icon-probe");
+        if (!container) return;
+        const probe = document.createElement("ha-icon");
+        probe.style.display = "none";
+        probe.icon = icon;
+        if (this.hass) probe.hass = this.hass;
+        container.appendChild(probe);
+        if (probe.updateComplete) await probe.updateComplete;
+        const directPath = probe.shadowRoot?.querySelector("path");
+        const svgIcon = probe.shadowRoot?.querySelector("ha-svg-icon");
+        const nestedPath = svgIcon?.shadowRoot?.querySelector("path") || null;
+        const pathEl = directPath || nestedPath;
+        const d = pathEl?.getAttribute?.("d") || null;
+        if (d) {
+          if (!this._iconPathCache) this._iconPathCache = new Map();
+          this._iconPathCache.set(icon, d);
+          this.requestUpdate();
+        }
+        container.removeChild(probe);
+      } finally {
+        this._iconPathPending.delete(icon);
+      }
+    });
+  }
+
   _isPowerDevice(entityId) {
     if (!entityId) return false;
     const st = this.hass?.states?.[entityId];
@@ -2083,6 +2224,9 @@ class CompactPowerCard extends (window.LitElement ||
     const padY = 2; // bottom padding; top is 0
     const baseWidth = Math.max(0, outerWidth - padX);
     const hasExternalHeight = outerHeight > defaultHeight + 32; // require meaningful external height to avoid slow creep
+    const hasPv =
+      this._config?.entities &&
+      Object.prototype.hasOwnProperty.call(this._config.entities, "pv");
     const baseHeight = hasExternalHeight ? Math.max(0, outerHeight - padY) : designHeight;
     const renderScaleY = baseHeight > 0 ? (outerHeight - padY) / baseHeight : 1;
     const xScale = baseWidth / designWidth;
@@ -2393,7 +2537,13 @@ class CompactPowerCard extends (window.LitElement ||
     const existing = this._flowAnimations[name];
     if (existing && existing.active) {
       existing.geom = geom;
-      existing.duration = duration;
+      if (Number.isFinite(duration)) {
+        const prev = Number.isFinite(existing.duration) ? existing.duration : duration;
+        const deltaRatio = prev ? Math.abs(duration - prev) / prev : 0;
+        if (deltaRatio >= 0.15) {
+          existing.duration = duration;
+        }
+      }
       if (geom?.mode === "path") {
         existing.pathEl = null;
         existing.pathLength = 0;
@@ -2574,6 +2724,10 @@ class CompactPowerCard extends (window.LitElement ||
     const homeNavigatePath = homeCfg?.navigation_path || homeCfg?.navigationPath || null;
     const homeCanNavigate = homeTapAction === "navigate" && Boolean(homeNavigatePath);
     const homeClickable = Boolean(homeCfg?.entity) || homeCanNavigate;
+    const homeIconId = homeCfg?.icon || "mdi:home";
+    const hasHomeIconOverride = Boolean(homeCfg?.icon);
+    const homeIconPath =
+      this._getMdiPath(homeIconId) || "M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z";
     const designWidth = 512;
     const designHeight = 184;
     const defaultWidth = 512;
@@ -2590,7 +2744,10 @@ class CompactPowerCard extends (window.LitElement ||
     const padY = 2; // bottom padding; top is 0
     const baseWidth = Math.max(0, outerWidth - padX);
     const hasExternalHeight = outerHeight > defaultHeight + 32; // require meaningful external height to avoid slow creep
-    const baseHeight = hasExternalHeight ? Math.max(0, outerHeight - padY) : designHeight;
+    const compactTrim = (!hasPv || !hasBattery) && pvLabels.length === 0 ? 20 : 0;
+    const baseHeight = hasExternalHeight
+      ? Math.max(0, outerHeight - padY - compactTrim)
+      : Math.max(0, designHeight - compactTrim);
     const renderScaleY = baseHeight > 0 ? (outerHeight - padY) / baseHeight : 1;
     const xScale = baseWidth / designWidth;
     const yScale = baseHeight / designHeight;
@@ -2708,7 +2865,15 @@ class CompactPowerCard extends (window.LitElement ||
     const renderValue = (text) => {
       if (!text) return text;
       const m = /^([+-]?\d[\d.,]*)(\s+.+)?$/.exec(String(text));
-      if (!m) return text;
+      if (!m) {
+        const s = String(text);
+        const spaceIdx = s.indexOf(" ");
+        const head = spaceIdx === -1 ? s : s.slice(0, spaceIdx);
+        const tail = spaceIdx === -1 ? "" : s.slice(spaceIdx);
+        return html`<span class="value-number">${head}</span>${tail
+          ? html`<span class="value-unit">${tail}</span>`
+          : ""}`;
+      }
       const num = m[1];
       const rest = m[2] || "";
       return html`<span class="value-number">${num}</span>${rest
@@ -2864,6 +3029,9 @@ class CompactPowerCard extends (window.LitElement ||
             : html`<span class="value-number">${batterySocDisplay}</span><span class="value-unit">%</span>`
         }`
       : battVal;
+    const battValNode = typeof battValDisplay === "string"
+      ? renderValue(battValDisplay)
+      : battValDisplay;
     const battArrow =
       battDisplay > 0 ? "mdi:arrow-left" : battDisplay < 0 ? "mdi:arrow-right" : null;
     const batteryIcon = Number.isFinite(batterySocPrimary)
@@ -3038,10 +3206,14 @@ class CompactPowerCard extends (window.LitElement ||
 
     // Sync host classes for hiding sections
     const hasPvLabels = pvLabels.length > 0;
+    const hasGridLabels = gridLabels.length > 0;
+    const hasBatteryLabels = batteryLabels.length > 0;
     this.classList.toggle("no-pv", !hasPv);
     this.classList.toggle("no-battery", !hasBattery);
     this.classList.toggle("pv-as-battery", pvInBatterySlot);
     this.classList.toggle("has-pv-labels", hasPvLabels);
+    this.classList.toggle("has-grid-labels", hasGridLabels);
+    this.classList.toggle("has-battery-labels", hasBatteryLabels);
 
     const pvLabelPositions = [];
     const pvLabelPad = Math.max(16, baseWidth * 0.05);
@@ -3056,41 +3228,43 @@ class CompactPowerCard extends (window.LitElement ||
       pvLabelPositions.push({ x: clampedX });
     }
     const pvLabelY = 28;
-    const pvLabelItems = pvLabels.map((lbl, idx) => {
-      const entity = lbl.entity || null;
-      const attribute = lbl.attribute || null;
-      const name = lbl.name || null;
-      const unitOverride = this._getUnitOverride(lbl);
-      const icon = lbl.icon || this._getLabelIcon(entity, attribute, "mdi:tag-text-outline");
-      const color = lbl.color || pvColor;
-      const numeric = this._getNumericMaybe(entity, attribute);
-      const decimals = this._getDecimalPlaces(lbl);
-      const val = this._formatEntity(entity, decimals, attribute, unitOverride);
-      const labelUnit =
-        unitOverride ||
-        this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
-        "";
-      const numericW = this._toWatts(numeric, labelUnit, true);
-      const hasNumeric = Number.isFinite(numericW);
-      const threshold = this._toWatts(this._parseThreshold(lbl.threshold), "W", true);
-      const opacity = hasNumeric ? (numericW === 0 ? 1 : this._opacityFor(numericW, threshold)) : 1;
-      const hidden = hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
-      const posMeta = pvLabelPositions[idx] || pvLabelPositions[pvLabelPositions.length - 1];
-      const leftPct = (posMeta.x / baseWidth) * 100;
-      const yPct = pctBaseY(pvLabelY); // PV stays fixed in Y
-      return {
-        entity,
-        name,
-        icon,
-        color,
-        val,
-        opacity,
-        hidden,
-        leftPct,
-        topPct: yPct,
-        numeric: hasNumeric ? numericW : 0,
-      };
-    });
+    const pvLabelItems = (!hasBattery && pvInBatterySlot)
+      ? []
+      : pvLabels.map((lbl, idx) => {
+        const entity = lbl.entity || null;
+        const attribute = lbl.attribute || null;
+        const name = lbl.name || null;
+        const unitOverride = this._getUnitOverride(lbl);
+        const icon = lbl.icon || this._getLabelIcon(entity, attribute, "mdi:tag-text-outline");
+        const color = lbl.color || pvColor;
+        const numeric = this._getNumericMaybe(entity, attribute);
+        const decimals = this._getDecimalPlaces(lbl);
+        const val = this._formatEntity(entity, decimals, attribute, unitOverride);
+        const labelUnit =
+          unitOverride ||
+          this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
+          "";
+        const numericW = this._toWatts(numeric, labelUnit, true);
+        const hasNumeric = Number.isFinite(numericW);
+        const threshold = this._toWatts(this._parseThreshold(lbl.threshold), "W", true);
+        const opacity = hasNumeric ? (numericW === 0 ? 1 : this._opacityFor(numericW, threshold)) : 1;
+        const hidden = hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
+        const posMeta = pvLabelPositions[idx] || pvLabelPositions[pvLabelPositions.length - 1];
+        const leftPct = (posMeta.x / baseWidth) * 100;
+        const yPct = pctBaseY(pvLabelY); // PV stays fixed in Y
+        return {
+          entity,
+          name,
+          icon,
+          color,
+          val,
+          opacity,
+          hidden,
+          leftPct,
+          topPct: yPct,
+          numeric: hasNumeric ? numericW : 0,
+        };
+      });
 
     const gridIconTop = gridNodeY + 9;
     const batteryIconTop = gridNodeY + 9;
@@ -3134,12 +3308,18 @@ class CompactPowerCard extends (window.LitElement ||
       { xPct: ((batteryIconX - 5) / baseWidth) * 100, yPx: gridNodeY - 30 },
       { xPct: ((batteryIconX - 5) / baseWidth) * 100, yPx: gridNodeY - 48 },
     ];
-    const batteryLabelItems = batteryLabels.map((lbl, idx) => {
+    const batteryLabelSource = (!hasBattery && pvInBatterySlot && pvLabels.length)
+      ? pvLabels
+      : batteryLabels;
+    const batteryLabelDefaultColor = (!hasBattery && pvInBatterySlot && pvLabels.length)
+      ? pvColor
+      : batteryColor;
+    const batteryLabelItems = batteryLabelSource.map((lbl, idx) => {
       const entity = lbl.entity || null;
       const attribute = lbl.attribute || null;
       const unitOverride = this._getUnitOverride(lbl);
       const icon = lbl.icon || this._getLabelIcon(entity, attribute, "mdi:tag-text-outline");
-      const color = lbl.color || batteryColor;
+      const color = lbl.color || batteryLabelDefaultColor;
       const numeric = this._getNumericMaybe(entity, attribute);
       const decimals = this._getDecimalPlaces(lbl);
       const val = this._formatEntity(entity, decimals, attribute, unitOverride);
@@ -3287,6 +3467,8 @@ class CompactPowerCard extends (window.LitElement ||
         hasBattery ? "" : "no-battery",
         pvInBatterySlot ? "pv-as-battery" : "",
         pvLabels.length > 0 ? "has-pv-labels" : "",
+        gridLabels.length > 0 ? "has-grid-labels" : "",
+        batteryLabels.length > 0 ? "has-battery-labels" : "",
         layoutReady ? "layout-ready" : "",
       ]
         .filter(Boolean)
@@ -3335,7 +3517,7 @@ class CompactPowerCard extends (window.LitElement ||
                 </div>
               </div>`
             )}
-            ${hasBattery
+            ${(hasBattery || (pvInBatterySlot && pvLabels.length))
               ? batteryLabelItems.map(
                   (lbl) => html`<div class="overlay-item anchor-right battery-label" style="margin-right: 10px; left:${lbl.xPct}%; top:${lbl.yPx}px;">
                     <div class="aux-marker clickable" style="flex-direction: row; gap: 4px;" @click=${() => this._openMoreInfo(lbl.entity || null)}>
@@ -3345,7 +3527,7 @@ class CompactPowerCard extends (window.LitElement ||
                   </div>`
                 )
               : ""}
-            ${!pvInBatterySlot || pvLabels.length
+            ${!pvInBatterySlot
               ? html`<div class="overlay-item pv-section pv-section-top" style="left:${(sx(256)/baseWidth)*100}%; top:${pctBaseY(24)}%;">
                   <div class="node-marker pv-marker clickable" @click=${() => this._handleTapAction(pvCfg, pvCfg.entity)}>
                     ${pvInBatterySlot
@@ -3361,7 +3543,7 @@ class CompactPowerCard extends (window.LitElement ||
                 </div>`
               : ""}
             ${pvInBatterySlot
-              ? html`<div class="overlay-item anchor-right pv-section pv-section-battery" style="left:${(batteryIconX/baseWidth)*100}%; top:${batteryIconTop}px;">
+              ? html`<div class="overlay-item anchor-right pv-section pv-section-battery" style="left:${((batteryIconX + 6)/baseWidth)*100}%; top:${batteryIconTop + 3}px;">
                   <div class="node-marker pv-marker right clickable" @click=${() => this._handleTapAction(pvCfg, pvCfg.entity)}>
                     <ha-icon icon="mdi:solar-panel" style="color:${pvColor}; opacity:1; filter:${allowGlow && pvNumeric !== 0 ? `drop-shadow(0 0 10px ${pvColor})` : "none"};"></ha-icon>
                     <div
@@ -3394,33 +3576,35 @@ class CompactPowerCard extends (window.LitElement ||
                   if (homeClickable) this._handleTapAction(homeCfg, homeCfg.entity);
                 }}
               >
-                <svg class="home-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="overflow: visible;">
-                  <defs>
-                    <linearGradient id="home-gradient" gradientUnits="userSpaceOnUse" x1="7" y1="7" x2="19" y2="20">
-                      <stop id="home-stop-1" offset="0%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
-                      <stop id="home-stop-2" offset="100%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
-                      <stop id="home-stop-3" offset="100%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
-                      <stop id="home-stop-4" offset="100%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
-                      <stop id="home-stop-5" offset="100%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
-                      <stop id="home-stop-6" offset="100%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
-                    </linearGradient>
-                    <filter id="home-glow-blur" x="-50%" y="-50%" width="200%" height="200%">
-                      <feGaussianBlur stdDeviation="2.5" />
-                    </filter>
-                  </defs>
-                  <title>home</title>
-                  <path
-                    fill="none"
-                    stroke="${this._config?.disable_home_gradient ? homeColor : "url(#home-gradient)"}"
-                    stroke-width="5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    opacity="${homeGlowOpacity}"
-                    filter="${allowGlow ? "url(#home-glow-blur)" : "none"}"
-                    d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"
-                  ></path>
-                  <path fill="${this._config?.disable_home_gradient ? homeColor : "url(#home-gradient)"}" d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"></path>
-                </svg>
+                <div class="home-icon-wrap">
+                  <svg class="home-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="overflow: visible;">
+                    <defs>
+                      <linearGradient id="home-gradient" gradientUnits="userSpaceOnUse" x1="7" y1="7" x2="19" y2="20">
+                        <stop id="home-stop-1" offset="0%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
+                        <stop id="home-stop-2" offset="100%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
+                        <stop id="home-stop-3" offset="100%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
+                        <stop id="home-stop-4" offset="100%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
+                        <stop id="home-stop-5" offset="100%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
+                        <stop id="home-stop-6" offset="100%" stop-color="${homeColor}" style="transition: stop-color 1s ease;"></stop>
+                      </linearGradient>
+                      <filter id="home-glow-blur" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur stdDeviation="2.5" />
+                      </filter>
+                    </defs>
+                    <title>home</title>
+                    <path
+                      fill="none"
+                      stroke="${this._config?.disable_home_gradient ? homeColor : "url(#home-gradient)"}"
+                      stroke-width="5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      opacity="${homeGlowOpacity}"
+                      filter="${allowGlow ? "url(#home-glow-blur)" : "none"}"
+                      d="${homeIconPath}"
+                    ></path>
+                    <path fill="${this._config?.disable_home_gradient ? homeColor : "url(#home-gradient)"}" d="${homeIconPath}"></path>
+                  </svg>
+                </div>
                 <div class="home-label" style="color:${homeColor}; opacity:${homeLabelHidden ? 0.35 : homeOpacity};">${renderValue(homeVal)}</div>
               </div>
             </div>
@@ -3442,11 +3626,12 @@ class CompactPowerCard extends (window.LitElement ||
                       ${battArrow && !batteryLabelHidden
                         ? html`<ha-icon class="inline-icon" icon="${battArrow}" style="color:${batteryColor}; opacity:1;"></ha-icon>`
                         : ""}
-                      <span style="opacity:1;">${renderValue(battValDisplay)}</span>
+                      <span style="opacity:1;">${battValNode}</span>
                     </div>
                   </div>
                 </div>`
               : ""}
+            <div id="icon-probe" style="display:none;"></div>
             ${batteryDetails.length
               ? html`<div class="overlay-item anchor-right-top" style="left:${batteryDetailsLeft}%; top:${batteryDetailsTopPx}px;">
                   <div class="battery-multi" style="margin-right: 6px; margin-top: 6px;">
