@@ -103,6 +103,43 @@ Common keys for `pv`, `grid`, `home`, `battery`. The following settings are poss
 | Tap Action | `tap_action`   | Set to `more-info` or `navigate`. `navigate` requires a `navigation_path`. Default behaviour is `more-info`     |
 | Navigation Path | `navigation_path`   | Used with `tap_action: navigate`. Set to a local path to go to a dashboard, e.g. `/my-dashboard/page`     |
 
+**Separate Entities for Grid or Battery:**
+
+If you don't have a single entity for grid or battery power, you can instead use separate entities for both. This is not part of the configuration UI, it can only be added as YAML manually to the card. 
+
+For Grid:
+
+| Name                | Setting slug            | What it does                                                                    |
+| ------------------- | ----------------------- | ------------------------------------------------------------------------------- |
+| Import Entity              | `import_entity`                | Sensor defining the import power from the grid.                                               |
+| Export Entity              | `export_entity`                | Sensor defining the export power from the grid.                                               |
+
+For Battery (can be provided for each battery):
+
+| Name                | Setting slug            | What it does                                                                    |
+| ------------------- | ----------------------- | ------------------------------------------------------------------------------- |
+| Charge Entity              | `charge_entity`                | Sensor defining the import power from the grid.                                               |
+| Discharge Entity              | `discharge_entity`                | Sensor defining the export power from the grid.    
+
+Example:
+
+```yaml
+type: custom:compact-power-card
+entities:
+  pv:
+    entity: sensor.givtcp_pv_power
+  battery:
+    - charge_entity: sensor.givtcp_charge_power
+      discharge_entity: sensor.givtcp_discharge_power
+    - charge_entity: sensor.givtcp_charge_power_battery2
+      discharge_entity: sensor.givtcp_discharge_power_battery2      
+  grid:
+    import_entity: sensor.givtcp_import_power
+    export_entity: sensor.givtcp_export_power
+    decimal_places: 1
+    threshold: 0
+```
+
 **Battery only:**
 
 | Name                | Setting slug            | What it does                                                                    |
