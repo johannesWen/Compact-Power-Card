@@ -111,15 +111,15 @@ For Grid:
 
 | Name                | Setting slug            | What it does                                                                    |
 | ------------------- | ----------------------- | ------------------------------------------------------------------------------- |
-| Import Entity              | `import_entity`                | Sensor defining the import power from the grid.                                               |
-| Export Entity              | `export_entity`                | Sensor defining the export power from the grid.                                               |
+| Import Entity              | `import_entity`                | Sensor defining the import power from the grid. |
+| Export Entity              | `export_entity`                | Sensor defining the export power to the grid. |
 
 For Battery (can be provided for each battery):
 
 | Name                | Setting slug            | What it does                                                                    |
 | ------------------- | ----------------------- | ------------------------------------------------------------------------------- |
-| Charge Entity              | `charge_entity`                | Sensor defining the import power from the grid.                                               |
-| Discharge Entity              | `discharge_entity`                | Sensor defining the export power from the grid.    
+| Charge Entity              | `charge_entity`                | Sensor defining the charge power to the battery. |
+| Discharge Entity              | `discharge_entity`                | Sensor defining the discharge power from the battery. |    
 
 Example:
 
