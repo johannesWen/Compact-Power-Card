@@ -103,7 +103,7 @@ Common keys for `pv`, `grid`, `home`, `battery`. The following settings are poss
 | Tap Action | `tap_action`   | Set to `more-info` or `navigate`. `navigate` requires a `navigation_path`. Default behaviour is `more-info`     |
 | Navigation Path | `navigation_path`   | Used with `tap_action: navigate`. Set to a local path to go to a dashboard, e.g. `/my-dashboard/page`     |
 
-**Separate Entities for Grid or Battery:**
+### Separate Entities for Grid or Battery:
 
 If you don't have a single entity for grid or battery power, you can instead use separate entities for both. This is not part of the configuration UI, it can only be added as YAML manually to the card. 
 
@@ -140,7 +140,7 @@ entities:
     threshold: 0
 ```
 
-**Battery only:**
+### Battery Only Settings:
 
 | Name                | Setting slug            | What it does                                                                    |
 | ------------------- | ----------------------- | ------------------------------------------------------------------------------- |
