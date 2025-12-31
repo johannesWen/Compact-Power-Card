@@ -278,11 +278,11 @@ Battery labels are setup differently (due to the nature of supporting multi-batt
     - entity: sensor.my_sensor
 ```
 
-## A specific note on unlimited devices and labels...
+## An important note on unlimited devices and labels...
 
 **Important:** you must increase the size of the card to see more labels/devices. Just adding them to the card configuration / YAML is not enough, the card hides them if rows/column minimums aren't met.
 
-There are cap limits are in place for the default size of the card (12 columns, 3 rows): 2 Grid, 2 Battery, 4 PV labels, 8 Devices.
+There are cap limits in place for the default size of the card (12 columns, 3 rows): 2 Grid, 2 Battery, 4 PV labels, 8 Devices.
 
 **Note:** There are of course theoretical limits due to the size of the cards which I cannot really avoid without making the UI tiny. In testing I am seeing 8 devices and PV labels for every 12 columns used, in theory grid and battery labels should be unlimited if you keep growing the card height. 
 
