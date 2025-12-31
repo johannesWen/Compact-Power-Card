@@ -4,16 +4,16 @@
 
 <img width="1043" height="640" alt="Screenshot 2025-12-24 at 07 39 40" src="https://github.com/user-attachments/assets/583dde65-2885-4cfb-8db0-d91a9ec7c580" />
 
-Inspired by the excellent [power flow card plus](https://github.com/flixlix/power-flow-card-plus) - A compact power card for Home Assistant that supports a tighter user experience, and 8 power devices/feeds from the home in a single card. In addition, the card can show up to 8 entity labels for whatever you want, colour and configure them how you need.
+Inspired by the excellent [power flow card plus](https://github.com/flixlix/power-flow-card-plus) - A compact power card for Home Assistant that supports a tighter user experience, labels and power devices in the home in a single card. Various elements are very customisable, see below for more. 
 
 ## Functionality
 
-- Up to 8 device power entities for the home that can help calculate the rest of home usage
-- Up to 8 additional state labels to show related info, like battery %, grid voltage, PV energy or whatever you want.
+- Add Device power entities for the home that can help calculate the rest of home usage
+- Add labels to show related info, like battery %, grid voltage, PV energy or whatever you want.
 - Thresholds can be set on entities to fade out the entity label below the threshold.
 - Home power is calculated by default based on the grid/power/battery. Alternatively, use a home power sensor.
 - Home icon dynamically changes colour based on the power provided to it.
-- Grid & Battery sensors expect +/- values for import/export or charge/discharge. These can be inverted if the default behaviour isn't what you want.
+- Grid & Battery sensors expect +/- values for import/export or charge/discharge. These can be inverted if the default behaviour isn't what you want. You can also provide separate import/export and charge/discharge entities.
 - Icons, colors and units can be customised.
 
 ## Installation
@@ -33,7 +33,6 @@ Before you dive in getting a complicated card all setup, start with the basics. 
 
 ```yaml
 type: custom:compact-power-card
-curved_lines: true
 curve_factor: 1
 entities:
   pv:
@@ -46,13 +45,15 @@ entities:
 
 ## Managing the size of the card
 
-This card is designed for the new [Home Assistant Sections UI](https://www.home-assistant.io/dashboards/sections/), introduced in 2024. This allows you to scale the card horizontally or vertically as you see fit. The card will dynamically resize to fit the rows and columns you setup in the card UI:
+This card is designed for the new [Home Assistant Sections UI](https://www.home-assistant.io/dashboards/sections/), introduced in 2024. This allows you to scale the card horizontally or vertically as you see fit. The card will dynamically resize to fit the rows and columns you setup in the card UI.
+
+**Note:** Caps are in place for the default size of the card (12 columns, 3 rows): 2 Grid, 2 Battery, 4 PV labels, 8 Devices.
 
 <img width="1000" height="741" alt="Screenshot 2025-12-18 at 10 41 00" src="https://github.com/user-attachments/assets/e0a1a5e2-8567-4c69-ad4e-c4cb7b0ec984" />
 
 # Compact Power Card Settings (Quick Reference)
 
-**Note:** All of these settings are available in the configuration UI, details here for reference.
+**Note:** All of these settings are available in the configuration UI (unless mentioned otherwise), details here for reference.
 
 ## Card-level
 
@@ -62,8 +63,7 @@ This card is designed for the new [Home Assistant Sections UI](https://www.home-
 | Decimal places | `decimal_places`| Default decimal places for all labels/values unless overridden at the entity/label level. |
 | Subtract devices from home | `subtract_devices_from_home` | If true, subtract summed devices from the home value. Default: `false`. |
 | Power Unit Override | `power_unit`| Set to W, kW or mW |
-| Show curved lines? | `curved_lines`| Set to `false` if you want a more straight-edge look. Default `true` |
-| Curved Line Radius | `curve_factor`| Adjusts the curve radius. `1` to `5`, `1` is default. Only works when `curved_lines: true` |
+| Curved Line Radius | `curve_factor`| Adjusts the curve radius. `0` to `5`, `1` is default. Set to `0` for straight lines. |
 | Device Power Lines | `show_device_power_lines`| Set to `true` to light up devices when power is flowing beyond a threshold. Default `false` |
 | Home Icon Gradient | `disable_home_gradient`| Set to `true` if you want the home icon to be a single colour. |
 | Remove Glow Effects | `remove_glow_effects`| Set to `true` to disable drop shadow/glow effects. Default `false` (dark mode only). |
@@ -85,7 +85,6 @@ Example:
 ```yaml
 type: custom:compact-power-card
 threshold_mode: display_only
-curved_lines: true
 curve_factor: 5
 ```
 
@@ -99,7 +98,7 @@ Common keys for `pv`, `grid`, `home`, `battery`. The following settings are poss
 | Threshold           | `threshold`             | Values below this are zeroed (per `threshold_mode`) and dimmed.                 |
 | Decimals            | `decimal_places`        | Number of decimals to display (defaults to card-level `decimal_places`, or 1).                                      |
 | Unit override       | `unit` / `unit_of_measurement` | Converts `W` to `kW` if set to `kW`         |
-| Invert state values | `invert_state_values`   | Flip sign of grid/battery readings (e.g., import/export, charge/discharge).     |
+| Invert state values | `invert_state_values`   | Flip positive/negative for the grid/battery readings      |
 | Tap Action | `tap_action`   | Set to `more-info` or `navigate`. `navigate` requires a `navigation_path`. Default behaviour is `more-info`     |
 | Navigation Path | `navigation_path`   | Used with `tap_action: navigate`. Set to a local path to go to a dashboard, e.g. `/my-dashboard/page`     |
 
@@ -107,19 +106,19 @@ Common keys for `pv`, `grid`, `home`, `battery`. The following settings are poss
 
 If you don't have a single entity for grid or battery power, you can instead use separate entities for both. This is not part of the configuration UI, it can only be added as YAML manually to the card. 
 
-For Grid:
+**For Grid:**
 
 | Name                | Setting slug            | What it does                                                                    |
 | ------------------- | ----------------------- | ------------------------------------------------------------------------------- |
 | Import Entity              | `import_entity`                | Sensor defining the import power from the grid. |
 | Export Entity              | `export_entity`                | Sensor defining the export power to the grid. |
 
-For Battery (can be provided for each battery):
+**For Battery** (can be provided for each battery):
 
 | Name                | Setting slug            | What it does                                                                    |
 | ------------------- | ----------------------- | ------------------------------------------------------------------------------- |
 | Charge Entity              | `charge_entity`                | Sensor defining the charge power to the battery. |
-| Discharge Entity              | `discharge_entity`                | Sensor defining the discharge power from the battery. |    
+| Discharge Entity              | `discharge_entity`                | Sensor defining the discharge power from the battery. |   
 
 Example:
 
@@ -170,7 +169,7 @@ The card supports many combinations: PV/Grid/Home/Battery, PV/Grid/Home, Battery
 
 ### Supporting multiple batteries
 
-The card will support more than 1 battery, this is experimental at the moment. Each battery can have a soc and capacity entity too.
+The card can support more than 1 battery. Each battery can have a soc and capacity entity too.
 
 The UI will calculate your % of battery available across multiple batteries. If you just provide the `battery_soc` it will be an average across the SoCs. If you also provide the `battery_capacity` it will calculate a weighted average across the batteries.
 
@@ -193,9 +192,11 @@ entities:
 
 ## Devices
 
-Devices are up to 8 power feeds within your home that you want to show in the card. By default, device power is not subtracted from the home power value. If you want that to happen, set the card-level `subtract_devices_from_home: true`.
+Devices are power feeds within your home that you want to show in the card. By default, device power is not subtracted from the home power value. If you want that to happen, set the card-level `subtract_devices_from_home: true`.
 
 **Important:** Any entity can be used in the device section to show icon/label, but only entities with `device_class: power` will be subtracted from the home power if `subtract_devices_from_home: true`. In addition, only devices with `device_class: power` will show power flow lines in the devices section. 
+
+**Important:** You can add as many devices as you want, however the display of them is determined by the card width, 12 columns = up to 8 devices, 24 columns = up to 16 devices. On small screens (phones) this will still be limited to 8 devices, unless in landscape mode where you should have more real estate.
 
 | Name                    | Setting slug                      | What it does                                                                     |
 | ----------------------- | --------------------------------- | -------------------------------------------------------------------------------- |
@@ -220,6 +221,7 @@ Example below of how devices can be setup:
       threshold: 50
       color: "#FFFFFF"
       switch_entity: switch.car_charger
+      name: Polestar
     - entity: sensor.pool_pump_power
       icon: mdi:pool
       threshold: 50
@@ -231,11 +233,13 @@ Example below of how devices can be setup:
 
 ## Labels (per pv/grid/battery)
 
-Labels can be used to display "other" information - that can be more power stats, energy stats, weather, whatever you want. You can add up to four PV labels and two grid labels (plus battery labels separately). Note: these are just labels, they do not factor into the power diagram or calculations at all. 
+Labels can be used to display "other" information - that can be more power stats, energy stats, weather, whatever you want. Note: these are just labels, they do not factor into the power diagram or calculations at all. 
+
+**Important:** You can add as many labels as you want, however the display of them is determined by the card size width and height. Defaults for a 12 column, 3 row card are 2 labels for grid and battery, 4 labels for PV. Max 8 labels for PV on small screens like phones, the rest are hidden.
 
 | Name          | Setting slug                 | What it does                                                         |
 | ------------- | ---------------------------- | -------------------------------------------------------------------- |
-| Labels list   | `labels`                     | Array (max 4 for PV, max 2 for grid) of label objects.                                             |
+| Labels list   | `labels`                     | Array of labels objects.                                             |
 | Label entity  | `entity`            | Sensor/entity id for the label value.                                |
 | Label attribute | `attribute`       | Read from an attribute instead of state.                             |
 | Label name | `name`       | PV only. Add a name to the label. Ensure card is >= 4 rows in height.                              |
@@ -273,6 +277,20 @@ Battery labels are setup differently (due to the nature of supporting multi-batt
     - entity: sensor.tempest_air_density
     - entity: sensor.my_sensor
 ```
+
+## A specific note on unlimited devices and labels...
+
+**Important:** you must increase the size of the card to see more labels/devices. Just adding them to the card configuration / YAML is not enough, the card hides them if rows/column minimums aren't met.
+
+There are cap limits are in place for the default size of the card (12 columns, 3 rows): 2 Grid, 2 Battery, 4 PV labels, 8 Devices.
+
+**Note:** There are of course theoretical limits due to the size of the cards which I cannot really avoid without making the UI tiny. In testing I am seeing 8 devices and PV labels for every 12 columns used, in theory grid and battery labels should be unlimited if you keep growing the card height. 
+
+**Another Note:** On small screens (phones), the width of wide cards is squeezed small - in this case a max of 8 PV labels or devices will be shown in the UI. 
+
+**Reminder:** Card resizing is [managed using sections](https://github.com/pacemaker82/Compact-Power-Card#managing-the-size-of-the-card).
+
+**Your mileage may vary with limitless labels and devices. It can lead to overlapping labels or other undesirable effects as there are so many possible scenarios that I can't really control.**
 
 ## Unit & Formatting behavior
 - W values auto-convert to kW when ≥ 1000 W, unless `power_unit` is forcing to `W`.

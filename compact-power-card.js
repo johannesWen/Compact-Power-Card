@@ -49,12 +49,8 @@ class CompactPowerCard extends (window.LitElement ||
                 },
               },        
               {
-                name: "curved_lines",
-                selector: { boolean: {} },
-              },          
-              {
                 name: "curve_factor",
-                selector: { number: { min: 1, max: 5, step: 0.5, mode: "slider" } },
+                selector: { number: { min: 0, max: 5, step: 0.5, mode: "slider" } },
               }, 
               {
                 name: "enable_device_power_lines",
@@ -448,7 +444,6 @@ class CompactPowerCard extends (window.LitElement ||
       ],
       computeLabel: (schema) => {
         if (schema.name === "help_text") return "Settings Coming Soon";
-        if (schema.name === "curved_lines") return "Use Curved Lines?";
         if (schema.name === "remove_glow_effects") return "Remove Glow Effects in Dark Mode?";
         if (schema.name === "battery") return "Batteries";
         if (schema.id === "grid-entity") return "Grid Power Entity";
@@ -470,10 +465,14 @@ class CompactPowerCard extends (window.LitElement ||
   }    
 
   getGridOptions() {
+    const ents = this._config?.entities || {};
+    const hasPv = Object.prototype.hasOwnProperty.call(ents, "pv");
+    const hasBattery = Object.prototype.hasOwnProperty.call(ents, "battery");
+    const minRows = hasPv && hasBattery ? 3 : 2;
     return {
       rows: 3,
       columns: 12,
-      min_rows: 3,
+      min_rows: minRows,
       min_columns: 9,
     };
   }
@@ -481,7 +480,6 @@ class CompactPowerCard extends (window.LitElement ||
   static getStubConfig() {
     return {
       type: "custom:compact-power-card",
-      curved_lines: true,
       curve_factor: 1,
       entities: {
         pv: { entity: "sensor.givtcp_pv_power" },
@@ -1044,8 +1042,15 @@ class CompactPowerCard extends (window.LitElement ||
       ha-card.no-pv .canvas,
       :host(.no-battery) .canvas,
       ha-card.no-battery .canvas {
-        margin-top: -20px;
+        margin-top: 0px;
         margin-bottom: 0px;
+      }
+
+      :host(.no-pv).has-single-side-label .canvas,
+      ha-card.no-pv.has-single-side-label .canvas,
+      :host(.no-battery).has-single-side-label .canvas,
+      ha-card.no-battery.has-single-side-label .canvas {
+        margin-top: -20px;
       }
 
       :host(.no-pv):not(.has-pv-labels):not(.has-grid-labels):not(.has-battery-labels) .canvas,
@@ -1156,19 +1161,163 @@ class CompactPowerCard extends (window.LitElement ||
   }
 
   _logLayoutSizes() {
-    const source =
-      this.closest("div.card.fit-rows") ||
-      this.closest("div.card") ||
-      this.parentElement ||
-      this;
-    const styles = getComputedStyle(source);
-    const columnSize = parseFloat(styles.getPropertyValue("--column-size")) || 0;
-    const rowSize = parseFloat(styles.getPropertyValue("--row-size")) || 0;
+    const candidates = [
+      this.shadowRoot?.querySelector("ha-card"),
+      this.closest("div.card.fit-rows"),
+      this.closest("div.card"),
+      this.parentElement,
+      this,
+    ].filter(Boolean);
+    let columnSize = 0;
+    let rowSize = 0;
+    for (const candidate of candidates) {
+      const styles = getComputedStyle(candidate);
+      const nextColumn = parseFloat(styles.getPropertyValue("--column-size")) || 0;
+      const nextRow = parseFloat(styles.getPropertyValue("--row-size")) || 0;
+      if (!columnSize && nextColumn) columnSize = nextColumn;
+      if (!rowSize && nextRow) rowSize = nextRow;
+      if (columnSize && rowSize) break;
+    }
     this._columnSize = columnSize;
     this._rowSize = rowSize;
     if (columnSize === this._lastColumnSize && rowSize === this._lastRowSize) return;
     this._lastColumnSize = columnSize;
     this._lastRowSize = rowSize;
+  }
+
+  _getLayoutMetrics({ hasPv, hasBattery, hasAnyLabels }) {
+    const designWidth = 512;
+    const designHeight = 184;
+    const defaultWidth = 512;
+    const defaultHeight = 184;
+    const hostRect = this.getBoundingClientRect ? this.getBoundingClientRect() : null;
+    const outerWidth = this._hostWidth != null ? this._hostWidth : hostRect?.width || defaultWidth;
+    const outerHeight =
+      this._externalHeight != null
+        ? this._externalHeight
+        : this._hostHeight != null
+        ? this._hostHeight
+        : hostRect?.height || defaultHeight;
+    const padX = 8; // ha-card left+right padding (4px each)
+    const padY = 2; // bottom padding; top is 0
+    const baseWidth = Math.max(0, outerWidth - padX);
+    const hasExternalHeight = outerHeight > defaultHeight + 32; // require meaningful external height to avoid slow creep
+    const compactTrim = (!hasPv || !hasBattery) && !hasAnyLabels ? 20 : 0;
+    const baseHeight = hasExternalHeight
+      ? Math.max(0, outerHeight - padY - compactTrim)
+      : Math.max(0, designHeight - compactTrim);
+    const renderScaleY = baseHeight > 0 ? (outerHeight - padY) / baseHeight : 1;
+    const xScale = baseWidth / designWidth;
+    const yScale = baseHeight / designHeight;
+    const viewHeight = baseHeight;
+    const rawRowSize = this._rowSize ?? this._lastRowSize ?? 0;
+    const rowCount =
+      rawRowSize > 0 && rawRowSize <= 10
+        ? rawRowSize
+        : Math.max(1, Math.round((outerHeight - padY) / (designHeight / 3)));
+    const rawColumnSize = this._columnSize ?? this._lastColumnSize ?? 0;
+    const columnCount =
+      rawColumnSize > 0 && rawColumnSize <= 24
+        ? rawColumnSize
+        : Math.max(1, Math.round((outerWidth - padX) / (designWidth / 12)));
+    let maxItemsByColumns = Math.max(1, Math.floor(columnCount / 1.5));
+    if (baseWidth <= 430) {
+      maxItemsByColumns = Math.min(maxItemsByColumns, 8);
+    }
+    const anchorLeftX = 51.2;
+    const sx = (v) => v * xScale;
+    const yOffset = 4;
+    const syTop = (v) => v + yOffset; // keep fixed distance from top
+    const sy = syTop;
+    const syHome = (v) => baseHeight - (designHeight - (v + yOffset)); // keep fixed distance from bottom
+    const syGridBatt = (v) => (v + yOffset) * yScale; // scale mid rows with height
+    const homeCenterX = baseWidth / 2;
+    const pvCenterX = homeCenterX;
+    const pvNodeY = sy(52);
+    const homeAnchorY = syHome(131);
+    const homeLineEndY = Math.max(0, homeAnchorY - 6);
+    const gridLineStartX = 35; // fixed distance from left
+    const gridLineEndX = baseWidth - 35; // fixed distance from right
+    const gridNodeY = syGridBatt(86);
+    const gridPvStartY = gridNodeY - 10; // start 10px above grid/battery baseline
+    const humpWidth = 22; // tighter hump span
+    const humpHeight = 7;
+    const humpHeightAdj = humpHeight / renderScaleY; // keep fixed screen px
+    const humpStartX = homeCenterX - humpWidth / 2;
+    const humpEndX = homeCenterX + humpWidth / 2;
+    const humpPeakY = gridNodeY - humpHeightAdj;
+    const humpCtrlInX = humpStartX + humpWidth * 0.25;
+    const humpCtrlOutX = humpEndX - humpWidth * 0.25;
+    const pvGridEndX = homeCenterX - 10; // Grid->PV ends 10px left of center
+    const pvGridTurnRadius = 8; // slightly larger radius for the grid→PV corner
+    const pvBatteryStartX = homeCenterX + 10; // shift PV→Battery start 10px right of center
+    const pvBatteryEndY = gridNodeY - 10; // lift PV→Battery end 10px above grid/battery baseline
+    const gridHomeStartY = gridNodeY + 10; // drop grid→home start 10px below grid/battery baseline
+    const gridHomeEndX = homeCenterX - 10; // end 10px left of home center
+    const batteryHomeStartY = gridNodeY + 10; // drop battery→home start 10px below grid/battery baseline
+    const batteryHomeEndX = homeCenterX + 10; // end 10px right of home center
+    const pvNode = { x: pvCenterX, y: pvNodeY };
+    const gridNode = { x: gridLineStartX, y: gridNodeY };
+    const batteryNode = { x: gridLineEndX, y: gridNodeY };
+    const homeNode = { x: homeCenterX, y: homeLineEndY };
+
+    return {
+      designWidth,
+      designHeight,
+      defaultWidth,
+      defaultHeight,
+      hostRect,
+      outerWidth,
+      outerHeight,
+      padX,
+      padY,
+      baseWidth,
+      baseHeight,
+      viewHeight,
+      renderScaleY,
+      xScale,
+      yScale,
+      hostRect,
+      rowCount,
+      columnCount,
+      maxItemsByColumns,
+      anchorLeftX,
+      sx,
+      yOffset,
+      syTop,
+      sy,
+      syHome,
+      syGridBatt,
+      homeCenterX,
+      pvCenterX,
+      pvNodeY,
+      homeAnchorY,
+      homeLineEndY,
+      gridLineStartX,
+      gridLineEndX,
+      gridNodeY,
+      gridPvStartY,
+      humpWidth,
+      humpHeight,
+      humpHeightAdj,
+      humpStartX,
+      humpEndX,
+      humpPeakY,
+      humpCtrlInX,
+      humpCtrlOutX,
+      pvGridEndX,
+      pvGridTurnRadius,
+      pvBatteryStartX,
+      pvBatteryEndY,
+      gridHomeStartY,
+      gridHomeEndX,
+      batteryHomeStartY,
+      batteryHomeEndX,
+      pvNode,
+      gridNode,
+      batteryNode,
+      homeNode,
+    };
   }
 
   _renderDeviceLines() {
@@ -1340,7 +1489,7 @@ class CompactPowerCard extends (window.LitElement ||
   _normalizeLabels(labels, max = 2) {
     if (!labels) return [];
     const arr = Array.isArray(labels) ? labels : [labels];
-    return arr
+    const normalized = arr
       .map((item) => {
         if (!item) return null;
         if (typeof item === "string") return { entity: item };
@@ -1364,8 +1513,9 @@ class CompactPowerCard extends (window.LitElement ||
         }
         return null;
       })
-      .filter(Boolean)
-      .slice(0, Math.max(0, max));
+      .filter(Boolean);
+    if (max == null) return normalized;
+    return normalized.slice(0, Math.max(0, max));
   }
 
   _normalizeSources(list) {
@@ -1436,12 +1586,12 @@ class CompactPowerCard extends (window.LitElement ||
     add(this._extractEntityRef(ents.grid?.import_entity || ents.grid?.importEntity));
     add(this._extractEntityRef(ents.grid?.export_entity || ents.grid?.exportEntity));
 
-    const pvLabels = this._normalizeLabels(ents.pv?.labels, 4);
-    const gridLabels = this._normalizeLabels(ents.grid?.labels);
+    const pvLabels = this._normalizeLabels(ents.pv?.labels, null);
+    const gridLabels = this._normalizeLabels(ents.grid?.labels, null);
     const batteryLabelsSource = Array.isArray(ents.battery)
       ? ents.battery_labels || ents.battery?.labels
       : ents.battery?.labels;
-    const batteryLabels = this._normalizeLabels(batteryLabelsSource);
+    const batteryLabels = this._normalizeLabels(batteryLabelsSource, null);
 
     pvLabels.forEach((lbl) => add(this._extractEntityRef(lbl?.entity)));
     gridLabels.forEach((lbl) => add(this._extractEntityRef(lbl?.entity)));
@@ -1502,8 +1652,15 @@ class CompactPowerCard extends (window.LitElement ||
     return true;
   }
 
+  _getCurveFactor() {
+    const raw = Number(this._config?.curve_factor);
+    if (Number.isFinite(raw)) return Math.min(5, Math.max(0, raw));
+    const legacyCurved = this._coerceBoolean(this._config?.curved_lines, true);
+    return legacyCurved ? 1 : 0;
+  }
+
   _useCurvedLines() {
-    return this._coerceBoolean(this._config?.curved_lines, true);
+    return this._getCurveFactor() > 0;
   }
 
   _useDevicePowerLines() {
@@ -2210,12 +2367,13 @@ class CompactPowerCard extends (window.LitElement ||
     const gridUsesDirectional =
       Boolean(gridCfg?.import_entity || gridCfg?.export_entity || gridCfg?.importEntity || gridCfg?.exportEntity);
     const invertGridEffective = invertGrid && !gridUsesDirectional;
-    const pvLabels = this._normalizeLabels(pvCfg?.labels, 4);
-    const gridLabels = this._normalizeLabels(gridCfg?.labels);
+    const pvLabels = this._normalizeLabels(pvCfg?.labels, null);
+    const gridLabelsRaw = this._normalizeLabels(gridCfg?.labels, null);
     const batteryLabelsSource = Array.isArray(this._config?.entities?.battery)
       ? this._config?.entities?.battery_labels || this._config?.entities?.battery?.labels
       : batteryCfg?.labels;
-    const batteryLabels = this._normalizeLabels(batteryLabelsSource);
+    const batteryLabels = this._normalizeLabels(batteryLabelsSource, null);
+    const hasAnyLabels = pvLabels.length > 0 || gridLabelsRaw.length > 0 || batteryLabels.length > 0;
     const pvUnit =
       this.hass?.states?.[pvCfg.entity]?.attributes?.unit_of_measurement ||
       "";
@@ -2372,67 +2530,46 @@ class CompactPowerCard extends (window.LitElement ||
     }
 
     // Geometry helpers consistent with render()
-    const designWidth = 512;
-    const designHeight = 184;
-    const defaultWidth = 512;
-    const defaultHeight = 184;
-    const hostRect = this.getBoundingClientRect ? this.getBoundingClientRect() : null;
-    const outerWidth = this._hostWidth != null ? this._hostWidth : hostRect?.width || defaultWidth;
-    const outerHeight =
-      this._externalHeight != null
-        ? this._externalHeight
-        : this._hostHeight != null
-        ? this._hostHeight
-        : hostRect?.height || defaultHeight;
-    const padX = 8; // ha-card left+right padding (4px each)
-    const padY = 2; // bottom padding; top is 0
-    const baseWidth = Math.max(0, outerWidth - padX);
-    const hasExternalHeight = outerHeight > defaultHeight + 32; // require meaningful external height to avoid slow creep
-    const hasPv =
-      this._config?.entities &&
-      Object.prototype.hasOwnProperty.call(this._config.entities, "pv");
-    const baseHeight = hasExternalHeight ? Math.max(0, outerHeight - padY) : designHeight;
-    const renderScaleY = baseHeight > 0 ? (outerHeight - padY) / baseHeight : 1;
-    const xScale = baseWidth / designWidth;
-    const yScale = baseHeight / designHeight;
-    const anchorLeftX = 51.2;
-    const sx = (v) => v * xScale;
-    const yOffset = 4;
-    const syTop = (v) => v + yOffset; // fixed from top
-    const sy = syTop;
-    const syHome = (v) => baseHeight - (designHeight - (v + yOffset)); // fixed from bottom
-    const syGridBatt = (v) => (v + yOffset) * yScale; // scales with height for grid/battery row
-    const homeCenterX = baseWidth / 2;
-    const pvCenterX = homeCenterX;
-    const pvNodeY = sy(52);
-    const homeAnchorY = syHome(131);
-    const homeLineEndY = Math.max(0, homeAnchorY - 6);
-    const gridLineStartX = 35; // fixed distance from left
-    const gridLineEndX = baseWidth - 35; // fixed distance from right
-    const gridNodeY = syGridBatt(86);
-    const gridPvStartY = gridNodeY - 10; // start 10px above grid/battery baseline
-    const humpHeight = 7;
-    const humpHeightAdj = humpHeight / renderScaleY; // keep 10px on screen even if viewBox scales
+    const layout = this._getLayoutMetrics({
+      hasPv:
+        this._config?.entities &&
+        Object.prototype.hasOwnProperty.call(this._config.entities, "pv"),
+      hasBattery,
+      hasAnyLabels,
+    });
+    const {
+      baseWidth,
+      renderScaleY,
+      homeCenterX,
+      pvNodeY,
+      homeAnchorY,
+      homeLineEndY,
+      gridLineStartX,
+      gridLineEndX,
+      gridNodeY,
+      gridPvStartY,
+      humpWidth,
+      humpHeightAdj,
+      humpStartX,
+      humpEndX,
+      humpPeakY,
+      humpCtrlInX,
+      humpCtrlOutX,
+      pvGridEndX,
+      pvGridTurnRadius,
+      pvBatteryStartX,
+      pvBatteryEndY,
+      gridHomeStartY,
+      gridHomeEndX,
+      batteryHomeStartY,
+      batteryHomeEndX,
+      pvNode,
+      gridNode,
+      batteryNode,
+      homeNode,
+    } = layout;
     const gridBatteryCtrlX = baseWidth / 2; // keep hump centered near home/PV line
     const gridBatteryCtrlY = gridNodeY - humpHeightAdj; // fixed hump height (screen px)
-    const humpWidth = 22; // tighter hump span
-    const humpStartX = homeCenterX - humpWidth / 2;
-    const humpEndX = homeCenterX + humpWidth / 2;
-    const humpPeakY = gridNodeY - humpHeightAdj; // fixed hump height (screen px)
-    const humpCtrlInX = humpStartX + humpWidth * 0.25;
-    const humpCtrlOutX = humpEndX - humpWidth * 0.25;
-    const pvGridEndX = homeCenterX - 10; // 10px left of home center
-    const pvGridTurnRadius = 8; // slightly larger radius for the grid→PV corner
-    const pvBatteryStartX = homeCenterX + 10; // shift PV→Battery start 10px right of center
-    const pvBatteryEndY = gridNodeY - 10; // lift PV→Battery end 10px above grid/battery baseline
-    const gridHomeStartY = gridNodeY + 10; // drop grid→home start 10px below grid/battery baseline
-    const gridHomeEndX = homeCenterX - 10; // end 10px left of home center
-    const batteryHomeStartY = gridNodeY + 10; // drop battery→home start 10px below grid/battery baseline
-    const batteryHomeEndX = homeCenterX + 10; // end 10px right of home center
-    const pvNode = { x: pvCenterX, y: pvNodeY };
-    const gridNode = { x: gridLineStartX, y: gridNodeY };
-    const batteryNode = { x: gridLineEndX, y: gridNodeY };
-    const homeNode = { x: homeCenterX, y: homeLineEndY };
 
     // Straight-line geometry between anchor points
     const gridBatteryGeom = curvedLines
@@ -2888,12 +3025,11 @@ class CompactPowerCard extends (window.LitElement ||
     const gridUsesDirectional =
       Boolean(gridCfg?.import_entity || gridCfg?.export_entity || gridCfg?.importEntity || gridCfg?.exportEntity);
     const invertGridEffective = invertGrid && !gridUsesDirectional;
-    const pvLabels = this._normalizeLabels(pvCfg?.labels, 4);
-    const gridLabels = this._normalizeLabels(gridCfg?.labels);
+    const pvLabels = this._normalizeLabels(pvCfg?.labels, null);
     const batteryLabelsSource = Array.isArray(this._config?.entities?.battery)
       ? this._config?.entities?.battery_labels || this._config?.entities?.battery?.labels
       : batteryCfg?.labels;
-    const batteryLabels = this._normalizeLabels(batteryLabelsSource);
+    const batteryLabels = this._normalizeLabels(batteryLabelsSource, null);
     const { sources: normalizedSources } = this._getSourcesConfig();
     const enableDevicePowerLines = this._useDevicePowerLines();
     const allowGlow = this._allowGlowEffects();
@@ -2913,69 +3049,103 @@ class CompactPowerCard extends (window.LitElement ||
     const hasGridIconOverride = Boolean(gridCfg?.icon);
     const gridIconPath =
       this._getMdiPath(gridIconId) || this._getMdiPath("mdi:transmission-tower");
-    const designWidth = 512;
-    const designHeight = 184;
-    const defaultWidth = 512;
-    const defaultHeight = 184;
-    const hostRect = this.getBoundingClientRect ? this.getBoundingClientRect() : null;
-    const outerWidth = this._hostWidth != null ? this._hostWidth : hostRect?.width || defaultWidth;
-    const outerHeight =
-      this._externalHeight != null
-        ? this._externalHeight
-        : this._hostHeight != null
-        ? this._hostHeight
-        : hostRect?.height || defaultHeight;
-    const padX = 8; // ha-card left+right padding (4px each)
-    const padY = 2; // bottom padding; top is 0
-    const baseWidth = Math.max(0, outerWidth - padX);
-    const hasExternalHeight = outerHeight > defaultHeight + 32; // require meaningful external height to avoid slow creep
-    const compactTrim = (!hasPv || !hasBattery) && pvLabels.length === 0 ? 20 : 0;
-    const baseHeight = hasExternalHeight
-      ? Math.max(0, outerHeight - padY - compactTrim)
-      : Math.max(0, designHeight - compactTrim);
-    const renderScaleY = baseHeight > 0 ? (outerHeight - padY) / baseHeight : 1;
-    const xScale = baseWidth / designWidth;
-    const yScale = baseHeight / designHeight;
-    const viewHeight = baseHeight;
-    const rowSize = this._rowSize ?? this._lastRowSize ?? 0;
-    const showDeviceNames = rowSize >= 4;
-    const showPvLabelNames = rowSize >= 4;
-    const anchorLeftX = 51.2;
-    const sx = (v) => v * xScale;
-    const yOffset = 4;
-    const syTop = (v) => v + yOffset; // keep fixed distance from top
-    const sy = syTop;
-    const syHome = (v) => baseHeight - (designHeight - (v + yOffset)); // keep fixed distance from bottom
-    const syGridBatt = (v) => (v + yOffset) * yScale; // scale mid rows with height
-    const homeCenterX = baseWidth / 2;
-    const pvCenterX = homeCenterX;
-    const pvNodeY = sy(52);
-    const homeAnchorY = syHome(131);
-    const homeLineEndY = Math.max(0, homeAnchorY - 6);
-    const gridLineStartX = 35; // fixed distance from left
-    const gridLineEndX = baseWidth - 35; // fixed distance from right
-    const gridNodeY = syGridBatt(86);
-    const gridPvStartY = gridNodeY - 10; // start 10px above grid/battery baseline
-    const humpWidth = 22; // tighter hump span
-    const humpHeight = 7;
-    const humpHeightAdj = humpHeight / renderScaleY; // keep fixed screen px
-    const humpStartX = homeCenterX - humpWidth / 2;
-    const humpEndX = homeCenterX + humpWidth / 2;
-    const humpPeakY = gridNodeY - humpHeightAdj;
-    const humpCtrlInX = humpStartX + humpWidth * 0.25;
-    const humpCtrlOutX = humpEndX - humpWidth * 0.25;
-    const pvGridEndX = homeCenterX - 10; // Grid->PV ends 10px left of center
-    const pvGridTurnRadius = 8; // slightly larger radius for the grid→PV corner
-    const pvBatteryStartX = homeCenterX + 10; // shift PV→Battery start 10px right of center
-    const pvBatteryEndY = gridNodeY - 10; // lift PV→Battery end 10px above grid/battery baseline
-    const gridHomeStartY = gridNodeY + 10; // drop grid→home start 10px below grid/battery baseline
-    const gridHomeEndX = homeCenterX - 10; // end 10px left of home center
-    const batteryHomeStartY = gridNodeY + 10; // drop battery→home start 10px below grid/battery baseline
-    const batteryHomeEndX = homeCenterX + 10; // end 10px right of home center
-    const pvNode = { x: pvCenterX, y: pvNodeY };
-    const gridNode = { x: gridLineStartX, y: gridNodeY };
-    const batteryNode = { x: gridLineEndX, y: gridNodeY };
-    const homeNode = { x: homeCenterX, y: homeLineEndY };
+    const gridLabelsRaw = this._normalizeLabels(gridCfg?.labels, null);
+    const batteryLabelsRaw = this._normalizeLabels(batteryLabelsSource, null);
+    const hasAnyLabels =
+      pvLabels.length > 0 || gridLabelsRaw.length > 0 || batteryLabelsRaw.length > 0;
+    const layout = this._getLayoutMetrics({
+      hasPv,
+      hasBattery,
+      hasAnyLabels,
+    });
+    const {
+      designWidth,
+      designHeight,
+      baseWidth,
+      baseHeight,
+      viewHeight,
+      renderScaleY,
+      xScale,
+      yScale,
+      hostRect,
+      rowCount,
+      columnCount,
+      maxItemsByColumns,
+      anchorLeftX,
+      sx,
+      yOffset,
+      syTop,
+      sy,
+      syHome,
+      syGridBatt,
+      homeCenterX,
+      pvCenterX,
+      pvNodeY,
+      homeAnchorY,
+      homeLineEndY,
+      gridLineStartX,
+      gridLineEndX,
+      gridNodeY,
+      gridPvStartY,
+      humpWidth,
+      humpHeight,
+      humpHeightAdj,
+      humpStartX,
+      humpEndX,
+      humpPeakY,
+      humpCtrlInX,
+      humpCtrlOutX,
+      pvGridEndX,
+      pvGridTurnRadius,
+      pvBatteryStartX,
+      pvBatteryEndY,
+      gridHomeStartY,
+      gridHomeEndX,
+      batteryHomeStartY,
+      batteryHomeEndX,
+      pvNode,
+      gridNode,
+      batteryNode,
+      homeNode,
+    } = layout;
+    const labelBonus = !hasPv || !hasBattery ? (rowCount >= 4 ? 2 : 1) : 0;
+    const gridBatteryBonus =
+      hasPv && hasBattery && pvLabels.length <= 4
+        ? (rowCount >= 4 ? 2 : 1)
+        : hasPv && hasBattery && rowCount >= 5
+        ? 1
+        : 0;
+    const gridLabelMax =
+      rowCount <= 2
+        ? Math.max(0, rowCount - 1 + labelBonus + gridBatteryBonus)
+        : rowCount <= 4
+        ? 2 + labelBonus + gridBatteryBonus
+        : Math.max(
+            0,
+            rowCount -
+              2 +
+              labelBonus +
+              gridBatteryBonus +
+              (rowCount >= 7 ? 1 : 0) +
+              (rowCount >= 8 ? 1 : 0)
+          );
+    const gridLabels = this._normalizeLabels(gridCfg?.labels, gridLabelMax);
+    const batteryLabelMax =
+      rowCount <= 2
+        ? Math.max(0, rowCount - 1 + labelBonus + gridBatteryBonus)
+        : rowCount <= 4
+        ? 2 + labelBonus + gridBatteryBonus
+        : Math.max(
+            0,
+            rowCount -
+              2 +
+              labelBonus +
+              gridBatteryBonus +
+              (rowCount >= 7 ? 1 : 0) +
+              (rowCount >= 8 ? 1 : 0)
+          );
+    const showDeviceNames = rowCount >= 4;
+    const showPvLabelNames = rowCount >= 4;
     const widthScale = 1;
     const iconOffset = 26 * widthScale;
     const gridIconX = gridLineStartX - iconOffset; // offset from line start, scale with width
@@ -3243,10 +3413,9 @@ class CompactPowerCard extends (window.LitElement ||
     const batteryIconPath = this._getMdiPath(batteryIconId);
 
     const batteryIconOpacity = 1;
-    const curvedLines = this._useCurvedLines();
-    const curveFactorRaw = Number(this._config?.curve_factor ?? 1);
-    const curveFactor = Math.min(5, Math.max(1, Number.isFinite(curveFactorRaw) ? curveFactorRaw : 1));
-    const curveScale = (curveFactor - 1) / 4; // 0 at factor 1, 1 at factor 5
+    const curveFactor = this._getCurveFactor();
+    const curvedLines = curveFactor > 0;
+    const curveScale = curvedLines ? (curveFactor - 1) / 4 : 0; // 0 at factor 1, 1 at factor 5
     const cornerBaseRadius = pvGridTurnRadius;
     const sourcePositions = [];
     const homeX = homeCenterX;
@@ -3307,25 +3476,44 @@ class CompactPowerCard extends (window.LitElement ||
     const visibleSources = deviceSources.filter(
       (src) => !(src.forceHideUnderThreshold && src.hidden)
     );
-    const maxDevices = Math.min(visibleSources.length, 8);
+    const maxDevices = Math.min(visibleSources.length, maxItemsByColumns);
+    const deviceVisible = visibleSources.slice(0, maxDevices);
 
     if (maxDevices > 0) {
-      // Build outward from the home icon in viewBox coords; keep symmetric spacing and respect padding.
+      // Build outward from the home icon in viewBox coords; spacing is driven by column count.
       const deviceWidth = baseWidth;
       const pad = Math.max(16, deviceWidth * 0.05);
-      const spacingBase = 56 * (deviceWidth / designWidth); // scale baseline with view width (44 at 512px)
-      const spacing = Math.max(spacingBase, (deviceWidth - pad * 2) / 10); // base spacing; spreads as width grows
+      const columnWidth = columnCount > 0 ? deviceWidth / columnCount : deviceWidth / 12;
+      const spacingBase = Math.max(
+        columnWidth * 1.5, // 1.5 columns per device slot
+        56 * (deviceWidth / designWidth) // keep a sensible minimum spacing on small widths
+      );
+      const deviceRings = Math.max(1, Math.ceil(maxDevices / 2));
+      const maxSpacing = (deviceWidth / 2 - pad) / deviceRings;
+      const spacing = Math.max(0, Math.min(spacingBase, maxSpacing));
 
-      for (let i = 0; i < maxDevices; i++) {
-        const ring = Math.floor(i / 2) + 1; // 1,1,2,2,3,3...
-        const dir = i % 2 === 0 ? -1 : 1; // left, right alternating
-        const rawX = homeX + dir * spacing * ring;
-        const clampedX = Math.max(pad, Math.min(deviceWidth - pad, rawX));
-        sourcePositions.push({ x: clampedX, y: homeRowYBase, leftPct: (clampedX / deviceWidth) * 100 });
+      for (let ring = 1; sourcePositions.length < maxDevices; ring++) {
+        const leftX = homeX - spacing * ring;
+        const rightX = homeX + spacing * ring;
+        const clampedLeft = Math.max(pad, Math.min(deviceWidth - pad, leftX));
+        const clampedRight = Math.max(pad, Math.min(deviceWidth - pad, rightX));
+        sourcePositions.push({
+          x: clampedLeft,
+          y: homeRowYBase,
+          leftPct: (clampedLeft / deviceWidth) * 100,
+        });
+        if (sourcePositions.length < maxDevices) {
+          sourcePositions.push({
+            x: clampedRight,
+            y: homeRowYBase,
+            leftPct: (clampedRight / deviceWidth) * 100,
+          });
+        }
+        if (ring >= deviceRings) break;
       }
     }
 
-    const sources = visibleSources.map((src, idx) => {
+    const sources = deviceVisible.map((src, idx) => {
       const pos = sourcePositions[idx] || { x: homeX, y: homeRowYBase };
       const key = src.entity || `idx-${src.sourceIndex}`;
       let active = false;
@@ -3406,33 +3594,128 @@ class CompactPowerCard extends (window.LitElement ||
     this._deviceLines = deviceLines;
     this._deviceLineStates = nextDeviceStates;
 
+    const pvLabelPositions = [];
+    const pvLabelPad = Math.max(16, baseWidth * 0.05);
+    const pvLabelSpacingBase = 56 * (baseWidth / designWidth);
+    const pvLabelCap = Math.max(4, maxItemsByColumns);
+    const pvLabelY = 28;
+
+    const gridIconTop = gridNodeY + 9;
+    const batteryIconTop = gridNodeY + 9;
+    const gridLabelCount = Math.min(gridLabels.length, gridLabelMax);
+    const gridLabelPositions = Array.from({ length: gridLabelCount }, (_, idx) => ({
+      xPct: ((gridIconX + 6) / baseWidth) * 100,
+      yPx: gridNodeY - 30 - (18 * idx),
+    }));
+    const gridLabelItems = gridLabels.slice(0, gridLabelCount).map((lbl, idx) => {
+      const entity = lbl.entity || null;
+      const attribute = lbl.attribute || null;
+      const unitOverride = this._getUnitOverride(lbl);
+      const icon = lbl.icon || this._getLabelIcon(entity, attribute, "mdi:tag-text-outline");
+      const color = lbl.color || gridColor;
+      const numeric = this._getNumericMaybe(entity, attribute);
+      const decimals = this._getDecimalPlaces(lbl);
+      const val = this._formatEntity(entity, decimals, attribute, unitOverride);
+      const labelUnit =
+        unitOverride ||
+        this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
+        "";
+      const numericW = this._toWatts(numeric, labelUnit, true);
+      const hasNumeric = Number.isFinite(numericW);
+      const threshold = this._toWatts(this._parseThreshold(lbl.threshold), "W", true);
+      const opacity = hasNumeric ? (numericW === 0 ? 1 : this._opacityFor(numericW, threshold)) : 1;
+      const hidden = hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
+      const pos = gridLabelPositions[idx] || gridLabelPositions[gridLabelPositions.length - 1];
+      return {
+        entity,
+        icon,
+        color,
+        val,
+        opacity,
+        hidden,
+        xPct: pos.xPct,
+        yPx: pos.yPx,
+        numeric: hasNumeric ? numericW : 0,
+      };
+    });
+
+    const batteryLabelSource = (!hasBattery && pvInBatterySlot && pvLabels.length)
+      ? pvLabels
+      : batteryLabels;
+    const batteryLabelDefaultColor = (!hasBattery && pvInBatterySlot && pvLabels.length)
+      ? pvColor
+      : batteryColor;
+    const batteryLabelCount = Math.min(batteryLabelSource.length, batteryLabelMax);
+    const batteryLabelPositions = Array.from({ length: batteryLabelCount }, (_, idx) => ({
+      xPct: ((batteryIconX - 5) / baseWidth) * 100,
+      yPx: gridNodeY - 30 - (18 * idx),
+    }));
+    const batteryLabelItems = batteryLabelSource.slice(0, batteryLabelCount).map((lbl, idx) => {
+      const entity = lbl.entity || null;
+      const attribute = lbl.attribute || null;
+      const unitOverride = this._getUnitOverride(lbl);
+      const icon = lbl.icon || this._getLabelIcon(entity, attribute, "mdi:tag-text-outline");
+      const color = lbl.color || batteryLabelDefaultColor;
+      const numeric = this._getNumericMaybe(entity, attribute);
+      const decimals = this._getDecimalPlaces(lbl);
+      const val = this._formatEntity(entity, decimals, attribute, unitOverride);
+      const labelUnit =
+        unitOverride ||
+        this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
+        "";
+      const numericW = this._toWatts(numeric, labelUnit, true);
+      const hasNumeric = Number.isFinite(numericW);
+      const threshold = this._toWatts(this._parseThreshold(lbl.threshold), "W", true);
+      const opacity = hasNumeric ? this._opacityFor(numericW, threshold) : 1;
+      const hidden = hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
+      const pos = batteryLabelPositions[idx] || batteryLabelPositions[batteryLabelPositions.length - 1];
+      return {
+        entity,
+        icon,
+        color,
+        val,
+        opacity,
+        hidden,
+        xPct: pos.xPct,
+        yPx: pos.yPx,
+        numeric: hasNumeric ? numericW : 0,
+      };
+    });
+
     // Sync host classes for hiding sections
     const hasPvLabels = pvLabels.length > 0;
-    const hasGridLabels = gridLabels.length > 0;
-    const hasBatteryLabels = batteryLabels.length > 0;
+    const hasGridLabels = gridLabelCount > 0;
+    const hasBatteryLabels = batteryLabelCount > 0;
+    const sideLabelCount = Math.max(gridLabelCount, batteryLabelCount);
+    const hasSingleSideLabel = sideLabelCount === 1;
     this.classList.toggle("no-pv", !hasPv);
     this.classList.toggle("no-battery", !hasBattery);
     this.classList.toggle("pv-as-battery", pvInBatterySlot);
     this.classList.toggle("has-pv-labels", hasPvLabels);
     this.classList.toggle("has-grid-labels", hasGridLabels);
     this.classList.toggle("has-battery-labels", hasBatteryLabels);
+    this.classList.toggle("has-single-side-label", hasSingleSideLabel);
 
-    const pvLabelPositions = [];
-    const pvLabelPad = Math.max(16, baseWidth * 0.05);
-    const pvLabelSpacingBase = 56 * (baseWidth / designWidth);
-    const pvLabelSpacing = Math.max(pvLabelSpacingBase, (baseWidth - pvLabelPad * 2) / 10);
-    const pvLabelMax = Math.min(pvLabels.length, 4);
-    for (let i = 0; i < pvLabelMax; i++) {
-      const ring = Math.floor(i / 2) + 1;
-      const dir = i % 2 === 0 ? -1 : 1;
-      const rawX = pvCenterX + dir * pvLabelSpacing * ring;
-      const clampedX = Math.max(pvLabelPad, Math.min(baseWidth - pvLabelPad, rawX));
-      pvLabelPositions.push({ x: clampedX });
+    const allowExtraPvLabels =
+      (rowCount === 3 && gridLabels.length <= 1 && batteryLabelSource.length <= 1) ||
+      (rowCount === 4 && (gridLabels.length <= 2 || batteryLabelSource.length <= 2));
+    const pvLabelLimit = rowCount >= 5 || allowExtraPvLabels ? pvLabelCap : 4;
+    const pvRings = Math.max(1, Math.ceil(pvLabelLimit / 2));
+    const pvMaxSpacing = (baseWidth / 2 - pvLabelPad) / pvRings;
+    const pvLabelSpacing = Math.max(0, Math.min(pvLabelSpacingBase, pvMaxSpacing));
+    for (let ring = 1; pvLabelPositions.length < pvLabelLimit; ring++) {
+      const leftX = pvCenterX - pvLabelSpacing * ring;
+      const rightX = pvCenterX + pvLabelSpacing * ring;
+      pvLabelPositions.push({ x: leftX });
+      if (pvLabelPositions.length < pvLabelLimit) {
+        pvLabelPositions.push({ x: rightX });
+      }
+      if (ring >= pvRings) break;
     }
-    const pvLabelY = 28;
+    const pvLabelMax = Math.min(pvLabels.length, pvLabelPositions.length);
     const pvLabelItems = (!hasBattery && pvInBatterySlot)
       ? []
-      : pvLabels.map((lbl, idx) => {
+      : pvLabels.slice(0, pvLabelMax).map((lbl, idx) => {
         const entity = lbl.entity || null;
         const attribute = lbl.attribute || null;
         const name = lbl.name || null;
@@ -3467,86 +3750,6 @@ class CompactPowerCard extends (window.LitElement ||
           numeric: hasNumeric ? numericW : 0,
         };
       });
-
-    const gridIconTop = gridNodeY + 9;
-    const batteryIconTop = gridNodeY + 9;
-    const gridLabelPositions = [
-      { xPct: ((gridIconX + 6) / baseWidth) * 100, yPx: gridNodeY - 30 },
-      { xPct: ((gridIconX + 6) / baseWidth) * 100, yPx: gridNodeY - 48 },
-    ];
-    const gridLabelItems = gridLabels.map((lbl, idx) => {
-      const entity = lbl.entity || null;
-      const attribute = lbl.attribute || null;
-      const unitOverride = this._getUnitOverride(lbl);
-      const icon = lbl.icon || this._getLabelIcon(entity, attribute, "mdi:tag-text-outline");
-      const color = lbl.color || gridColor;
-      const numeric = this._getNumericMaybe(entity, attribute);
-      const decimals = this._getDecimalPlaces(lbl);
-      const val = this._formatEntity(entity, decimals, attribute, unitOverride);
-      const labelUnit =
-        unitOverride ||
-        this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
-        "";
-      const numericW = this._toWatts(numeric, labelUnit, true);
-      const hasNumeric = Number.isFinite(numericW);
-      const threshold = this._toWatts(this._parseThreshold(lbl.threshold), "W", true);
-      const opacity = hasNumeric ? (numericW === 0 ? 1 : this._opacityFor(numericW, threshold)) : 1;
-      const hidden = hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
-      const pos = gridLabelPositions[idx] || gridLabelPositions[gridLabelPositions.length - 1];
-      return {
-        entity,
-        icon,
-        color,
-        val,
-        opacity,
-        hidden,
-        xPct: pos.xPct,
-        yPx: pos.yPx,
-        numeric: hasNumeric ? numericW : 0,
-      };
-    });
-
-    const batteryLabelPositions = [
-      { xPct: ((batteryIconX - 5) / baseWidth) * 100, yPx: gridNodeY - 30 },
-      { xPct: ((batteryIconX - 5) / baseWidth) * 100, yPx: gridNodeY - 48 },
-    ];
-    const batteryLabelSource = (!hasBattery && pvInBatterySlot && pvLabels.length)
-      ? pvLabels
-      : batteryLabels;
-    const batteryLabelDefaultColor = (!hasBattery && pvInBatterySlot && pvLabels.length)
-      ? pvColor
-      : batteryColor;
-    const batteryLabelItems = batteryLabelSource.map((lbl, idx) => {
-      const entity = lbl.entity || null;
-      const attribute = lbl.attribute || null;
-      const unitOverride = this._getUnitOverride(lbl);
-      const icon = lbl.icon || this._getLabelIcon(entity, attribute, "mdi:tag-text-outline");
-      const color = lbl.color || batteryLabelDefaultColor;
-      const numeric = this._getNumericMaybe(entity, attribute);
-      const decimals = this._getDecimalPlaces(lbl);
-      const val = this._formatEntity(entity, decimals, attribute, unitOverride);
-      const labelUnit =
-        unitOverride ||
-        this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
-        "";
-      const numericW = this._toWatts(numeric, labelUnit, true);
-      const hasNumeric = Number.isFinite(numericW);
-      const threshold = this._toWatts(this._parseThreshold(lbl.threshold), "W", true);
-      const opacity = hasNumeric ? this._opacityFor(numericW, threshold) : 1;
-      const hidden = hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
-      const pos = batteryLabelPositions[idx] || batteryLabelPositions[batteryLabelPositions.length - 1];
-      return {
-        entity,
-        icon,
-        color,
-        val,
-        opacity,
-        hidden,
-        xPct: pos.xPct,
-        yPx: pos.yPx,
-        numeric: hasNumeric ? numericW : 0,
-      };
-    });
 
     const batteryDetails =
       batteryList.length > 1
@@ -3664,16 +3867,17 @@ class CompactPowerCard extends (window.LitElement ||
       ? `M${gridNode.x} ${gridNode.y} H${humpStartX} Q${humpCtrlInX} ${humpPeakY} ${homeCenterX} ${humpPeakY} Q${humpCtrlOutX} ${humpPeakY} ${humpEndX} ${gridNode.y} H${batteryNode.x}`
       : `M${gridNode.x} ${gridNode.y} H${batteryNode.x}`;
 
-    const layoutReady = this._layoutReady || ((hostRect?.width || 0) > 0);
+    const layoutReady = this._layoutReady;
 
     return html`
       <ha-card class="${[
         hasPv ? "" : "no-pv",
         hasBattery ? "" : "no-battery",
         pvInBatterySlot ? "pv-as-battery" : "",
-        pvLabels.length > 0 ? "has-pv-labels" : "",
-        gridLabels.length > 0 ? "has-grid-labels" : "",
-        batteryLabels.length > 0 ? "has-battery-labels" : "",
+        hasPvLabels ? "has-pv-labels" : "",
+        hasGridLabels ? "has-grid-labels" : "",
+        hasBatteryLabels ? "has-battery-labels" : "",
+        hasSingleSideLabel ? "has-single-side-label" : "",
         layoutReady ? "layout-ready" : "",
       ]
         .filter(Boolean)
