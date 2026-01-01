@@ -2839,13 +2839,7 @@ class CompactPowerCard extends (window.LitElement ||
     if (existing && existing.active) {
       existing.geom = geom;
       if (Number.isFinite(duration)) {
-        const now = performance.now ? performance.now() : Date.now();
-        const prev = Number.isFinite(existing.duration) ? existing.duration : duration;
-        const dt = Math.max(0, now - (existing.lastUpdateTs || now));
-        const tau = 1200; // ms time constant for smoothing
-        const alpha = 1 - Math.exp(-dt / tau);
-        existing.duration = prev + (duration - prev) * alpha;
-        existing.lastUpdateTs = now;
+        existing.pendingDuration = duration;
       }
       if (geom?.mode === "path") {
         existing.pathEl = null;
@@ -2864,7 +2858,8 @@ class CompactPowerCard extends (window.LitElement ||
       start: null,
       geom,
       duration,
-      lastUpdateTs: performance.now ? performance.now() : Date.now(),
+      pendingDuration: null,
+      lastPhase: 0,
     };
     if (name === "pv-home") {
       animState.lockCXPercent = "50%";
@@ -2877,6 +2872,12 @@ class CompactPowerCard extends (window.LitElement ||
       const d = animState.duration || 1500;
       const elapsed = (timestamp - animState.start) % d;
       const t = elapsed / d;
+      if (animState.pendingDuration != null && t < animState.lastPhase) {
+        animState.duration = animState.pendingDuration;
+        animState.pendingDuration = null;
+        animState.start = timestamp;
+      }
+      animState.lastPhase = t;
       const fadeInEnd = 0.05;
       const fadeOutStart = 0.85;
       let opacity = 1;
