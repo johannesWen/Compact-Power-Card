@@ -198,6 +198,8 @@ Devices are power feeds within your home that you want to show in the card. By d
 
 **Important:** Any entity can be used in the device section to show icon/label, but only entities with `device_class: power` will be subtracted from the home power if `subtract_devices_from_home: true`. In addition, only devices with `device_class: power` will show power flow lines in the devices section. 
 
+<img width="746" height="97" alt="Screenshot 2026-01-03 at 07 34 56" src="https://github.com/user-attachments/assets/e19c6c40-aec6-456c-80ac-3b307d663f3b" />
+
 **Important:** You can add as many devices as you want, however the display of them is determined by the card width, 12 columns = up to 8 devices, 24 columns = up to 16 devices. On small screens (phones) this will still be limited to 8 devices, unless in landscape mode where you should have more real estate.
 
 | Name                    | Setting slug                      | What it does                                                                     |
