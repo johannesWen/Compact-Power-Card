@@ -207,7 +207,7 @@ Devices are power feeds within your home that you want to show in the card. By d
 | Device entity           | `entity`                | Sensor/entity id for a load.                                          |
 | Device attribute        | `attribute`             | Read from an attribute instead of state.                                         |
 | Switch Entity        | `switch_entity`             | Will toggle the on/off of the switch when pressing the icon/label.                                         |
-| Name Label            | `name`                  | Show a label for each device. Only works with card set to 4 or more rows in height in the sections UI. [See here](https://github.com/pacemaker82/Compact-Power-Card#managing-the-size-of-the-card) for more                                              |
+| Name Label            | `name`                  | Show a label for each device. Can use either a string or entity ID. Only works with card set to 4 or more rows in height in the sections UI. [See here](https://github.com/pacemaker82/Compact-Power-Card#managing-the-size-of-the-card) for more                                              |
 | Icon             | `icon`                  | Optional icon for the device badge.                                              |
 | Color            | `color`                 | Optional color override for that device.                                         |
 | Threshold        | `threshold`             | Dims/zeros device below threshold (in watts) (per `threshold_mode`).                        |
