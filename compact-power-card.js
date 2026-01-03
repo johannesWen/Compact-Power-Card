@@ -1619,6 +1619,7 @@ class CompactPowerCard extends (window.LitElement ||
     sources.forEach((src) => {
       add(this._extractEntityRef(src?.entity));
       add(this._extractEntityRef(src?.switch_entity));
+      add(this._extractEntityRef(src?.name));
     });
 
     return ids;
@@ -1791,6 +1792,16 @@ class CompactPowerCard extends (window.LitElement ||
       return num.toFixed(decimalsToUse);
     }
     return u ? `${s} ${u}` : s;
+  }
+
+  _formatEntityStateWithUnit(entityId) {
+    if (!this.hass || !entityId) return "";
+    const obj = this.hass.states[entityId];
+    if (!obj) return "";
+    const state = obj.state;
+    const unit = obj.attributes?.unit_of_measurement;
+    if (unit) return `${state} ${unit}`;
+    return state == null ? "" : String(state);
   }
 
   _isWattToKw(num, unit) {
@@ -3431,6 +3442,8 @@ class CompactPowerCard extends (window.LitElement ||
       const switchEntity = src.switch_entity || src.switchEntity || null;
       const attribute = src.attribute || null;
       const name = src.name || null;
+      const nameEntity = name && this.hass?.states?.[name] ? name : null;
+      const displayName = nameEntity ? this._formatEntityStateWithUnit(nameEntity) : name;
       const icon = src.icon || this._getEntityIcon(entity, "mdi:power-plug");
       const isPowerDevice = this._isPowerDevice(entity);
       const numeric = this._getNumericMaybe(entity, attribute);
@@ -3461,7 +3474,7 @@ class CompactPowerCard extends (window.LitElement ||
         entity,
         switchEntity,
         switchOn,
-        name,
+        name: displayName,
         icon,
         val,
         color,
