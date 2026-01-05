@@ -431,6 +431,10 @@ class CompactPowerCard extends (window.LitElement ||
                         label: "Power Threshold (in watts)",
                         selector: { number: { step: 1, } },
                       },
+                      subtract_from_home: {
+                        label: "Subtract from Home?",
+                        selector: { boolean: {} },
+                      },
                       force_hide_under_threshold: {
                         label: "Force hide device when under Threshold?",
                         selector: { boolean: {} },
@@ -2457,10 +2461,17 @@ class CompactPowerCard extends (window.LitElement ||
     const { sources: normalizedSources, subtractFromHome } = this._getSourcesConfig();
 
     let auxUsage = 0;
+    let hasPerDeviceInclude = false;
     for (const src of normalizedSources) {
       const entity = src.entity || null;
       const attribute = src.attribute || null;
       if (!this._isPowerDevice(entity)) continue;
+      const hasPerDeviceSubtract = Object.prototype.hasOwnProperty.call(src, "subtract_from_home");
+      const includeInHome = hasPerDeviceSubtract
+        ? this._coerceBoolean(src.subtract_from_home, subtractFromHome)
+        : subtractFromHome;
+      if (!includeInHome) continue;
+      if (hasPerDeviceSubtract && includeInHome) hasPerDeviceInclude = true;
       const srcUnit =
         this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
         "";
@@ -2474,14 +2485,15 @@ class CompactPowerCard extends (window.LitElement ||
     const hasHomeEntity = Boolean(homeCfg?.entity);
     const baseHome = Number.isFinite(homeRawW) ? homeRawW : 0;
     const inferredBase = pv + battery - grid;
+    const allowSubtract = subtractFromHome || hasPerDeviceInclude;
     let homeEffectiveDisplay = 0;
     let homeEffectiveFlow = 0;
     if (hasHomeEntity) {
-      const adjustedHome = subtractFromHome ? baseHome - auxUsage : baseHome;
+      const adjustedHome = allowSubtract ? baseHome - auxUsage : baseHome;
       homeEffectiveDisplay = Math.max(adjustedHome, 0);
       homeEffectiveFlow = Math.max(inferredBase, 0);
     } else {
-      const inferredDisplay = Math.max(subtractFromHome ? inferredBase - auxUsage : inferredBase, 0);
+      const inferredDisplay = Math.max(allowSubtract ? inferredBase - auxUsage : inferredBase, 0);
       homeEffectiveDisplay = inferredDisplay;
       homeEffectiveFlow = Math.max(inferredBase, 0);
     }
