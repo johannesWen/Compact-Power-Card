@@ -194,7 +194,7 @@ entities:
 
 ## Devices
 
-Devices are power feeds within your home that you want to show in the card. By default, device power is not subtracted from the home power value. If you want that to happen, set the card-level `subtract_devices_from_home: true`.
+Devices are power feeds within your home that you want to show in the card. By default, device power is not subtracted from the home power value. If you want that to happen, set the card-level `subtract_devices_from_home: true`. You can override this per device with `subtract_from_home` (omit it to inherit the card-level setting).
 
 **Important:** Any entity can be used in the device section to show icon/label, but only entities with `device_class: power` will be subtracted from the home power if `subtract_devices_from_home: true`. In addition, only devices with `device_class: power` will show power flow lines in the devices section. 
 
@@ -211,6 +211,7 @@ Devices are power feeds within your home that you want to show in the card. By d
 | Icon             | `icon`                  | Optional icon for the device badge.                                              |
 | Color            | `color`                 | Optional color override for that device.                                         |
 | Threshold        | `threshold`             | Dims/zeros device below threshold (in watts) (per `threshold_mode`).                        |
+| Subtract from home | `subtract_from_home` | Overrides card-level `subtract_devices_from_home` for this device. |
 | Force hide under threshold | `force_hide_under_threshold` | If true, hides the device entirely when under threshold. Will hide at 0 W if no threshold set. |
 | Decimals         | `decimal_places`        | Decimal places for that device (defaults to card-level `decimal_places`).                                                  |
 | Unit of Measurement             | `unit` / `unit_of_measurement` | Converts `W` to `kW` if set to `kW`                    |
@@ -229,6 +230,7 @@ Example below of how devices can be setup:
     - entity: sensor.pool_pump_power
       icon: mdi:pool
       threshold: 50
+      subtract_from_home: false
     - entity: climate.garage
       attribute: temperature
       unit: "C"
