@@ -211,7 +211,7 @@ Devices are power feeds within your home that you want to show in the card. By d
 | Icon             | `icon`                  | Optional icon for the device badge.                                              |
 | Color            | `color`                 | Optional color override for that device.                                         |
 | Threshold        | `threshold`             | Dims/zeros device below threshold (in watts) (per `threshold_mode`).                        |
-| Subtract from home | `subtract_from_home` | Overrides card-level `subtract_devices_from_home` for this device. |
+| Subtract from home | `subtract_from_home` | `true` or `false` - Overrides card-level `subtract_devices_from_home` for this device. |
 | Force hide under threshold | `force_hide_under_threshold` | If true, hides the device entirely when under threshold. Will hide at 0 W if no threshold set. |
 | Decimals         | `decimal_places`        | Decimal places for that device (defaults to card-level `decimal_places`).                                                  |
 | Unit of Measurement             | `unit` / `unit_of_measurement` | Converts `W` to `kW` if set to `kW`                    |
