@@ -71,6 +71,7 @@ This card is designed for the new [Home Assistant Sections UI](https://www.home-
 | Device Power Lines | `show_device_power_lines`| Set to `true` to light up devices when power is flowing beyond a threshold. Default `false` |
 | Home Icon Gradient | `disable_home_gradient`| Set to `true` if you want the home icon to be a single colour. |
 | Remove Glow Effects | `remove_glow_effects`| Set to `true` to disable drop shadow/glow effects. Default `false` (dark mode only). |
+| Hide Card Background | `hide_card_background`| Set to `true` to hide the standard HA card background. Default `false`. |
 
 ### Thresholds in detail
 
