@@ -20,6 +20,8 @@ Inspired by the excellent [power flow card plus](https://github.com/flixlix/powe
 
 ## Installation
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=pacemaker82&repository=Compact-Power-Card)
+
 Custom Power Card should be available in the HACS store by default, simply search for it. If you cannot find it, follow the instructions below:
 
 1. Goto HACS (if you dont have that installed, install HACS)
