@@ -64,6 +64,10 @@ class CompactPowerCard extends (window.LitElement ||
                 name: "remove_glow_effects",
                 selector: { boolean: {} },
               },
+              {
+                name: "hide_card_background",
+                selector: { boolean: {} },
+              },
           ]
         },       
         {
@@ -565,6 +569,12 @@ class CompactPowerCard extends (window.LitElement ||
         box-shadow: var(--ha-card-box-shadow);
         position: relative;
         height: 100%;
+      }
+
+      ha-card.transparent {
+        background: transparent;
+        box-shadow: none;
+        border: none;
       }
 
       .canvas {
@@ -3894,6 +3904,7 @@ class CompactPowerCard extends (window.LitElement ||
       : `M${gridNode.x} ${gridNode.y} H${batteryNode.x}`;
 
     const layoutReady = this._layoutReady;
+    const hideCardBackground = this._coerceBoolean(this._config?.hide_card_background, false);
 
     return html`
       <ha-card class="${[
@@ -3904,6 +3915,7 @@ class CompactPowerCard extends (window.LitElement ||
         hasGridLabels ? "has-grid-labels" : "",
         hasBatteryLabels ? "has-battery-labels" : "",
         hasSingleSideLabel ? "has-single-side-label" : "",
+        hideCardBackground ? "transparent" : "",
         layoutReady ? "layout-ready" : "",
       ]
         .filter(Boolean)
