@@ -2085,6 +2085,11 @@ class CompactPowerCard extends (window.LitElement ||
     return Number.isFinite(n) ? n : null;
   }
 
+  _isUnavailableState(raw) {
+    const s = String(raw ?? "").toLowerCase();
+    return s === "unknown" || s === "unavailable";
+  }
+
   _parseDecimalPlaces(val) {
     const n = typeof val === "string" ? parseInt(val, 10) : val;
     if (!Number.isFinite(n) || n < 0) return null;
@@ -3468,13 +3473,14 @@ class CompactPowerCard extends (window.LitElement ||
       const displayName = nameEntity ? this._formatEntityStateWithUnit(nameEntity) : name;
       const icon = src.icon || this._getEntityIcon(entity, "mdi:power-plug");
       const isPowerDevice = this._isPowerDevice(entity);
-      const numeric = this._getNumericMaybe(entity, attribute);
-      const unit =
-        this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
-        "";
+      const st = entity ? this.hass?.states?.[entity] : null;
+      const raw = attribute ? st?.attributes?.[attribute] : st?.state;
+      const isUnavailable = this._isUnavailableState(raw);
+      const numeric = isUnavailable ? 0 : this._getNumericMaybe(entity, attribute);
+      const unit = st?.attributes?.unit_of_measurement || "";
       const decimals = this._getDecimalPlaces(src);
-      const numericW = this._toWatts(numeric, unit, true);
-      const hasNumeric = Number.isFinite(numericW);
+      const numericW = isUnavailable ? 0 : this._toWatts(numeric, unit, true);
+      const hasNumeric = isUnavailable ? true : Number.isFinite(numericW);
       const unitOverride = this._getUnitOverride(src);
       let val = hasNumeric
         ? this._formatPowerWithOverride(numericW, decimals, "W", unitOverride ?? null)
@@ -3649,15 +3655,22 @@ class CompactPowerCard extends (window.LitElement ||
       const unitOverride = this._getUnitOverride(lbl);
       const icon = lbl.icon || this._getLabelIcon(entity, attribute, "mdi:tag-text-outline");
       const color = lbl.color || gridColor;
-      const numeric = this._getNumericMaybe(entity, attribute);
+      const st = entity ? this.hass?.states?.[entity] : null;
+      const raw = attribute ? st?.attributes?.[attribute] : st?.state;
+      const isUnavailable = this._isUnavailableState(raw);
+      const numeric = isUnavailable ? 0 : this._getNumericMaybe(entity, attribute);
       const decimals = this._getDecimalPlaces(lbl);
-      const val = this._formatEntity(entity, decimals, attribute, unitOverride);
       const labelUnit =
         unitOverride ||
         this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
         "";
-      const numericW = this._toWatts(numeric, labelUnit, true);
-      const hasNumeric = Number.isFinite(numericW);
+      const numericW = isUnavailable ? 0 : this._toWatts(numeric, labelUnit, true);
+      const hasNumeric = isUnavailable ? true : Number.isFinite(numericW);
+      const val = isUnavailable
+        ? "0"
+        : hasNumeric
+        ? this._formatPowerWithOverride(numericW, decimals, "W", unitOverride ?? null)
+        : this._formatEntity(entity, decimals, attribute, unitOverride);
       const threshold = this._toWatts(this._parseThreshold(lbl.threshold), "W", true);
       const opacity = hasNumeric ? (numericW === 0 ? 1 : this._opacityFor(numericW, threshold)) : 1;
       const hidden = hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
@@ -3692,15 +3705,22 @@ class CompactPowerCard extends (window.LitElement ||
       const unitOverride = this._getUnitOverride(lbl);
       const icon = lbl.icon || this._getLabelIcon(entity, attribute, "mdi:tag-text-outline");
       const color = lbl.color || batteryLabelDefaultColor;
-      const numeric = this._getNumericMaybe(entity, attribute);
+      const st = entity ? this.hass?.states?.[entity] : null;
+      const raw = attribute ? st?.attributes?.[attribute] : st?.state;
+      const isUnavailable = this._isUnavailableState(raw);
+      const numeric = isUnavailable ? 0 : this._getNumericMaybe(entity, attribute);
       const decimals = this._getDecimalPlaces(lbl);
-      const val = this._formatEntity(entity, decimals, attribute, unitOverride);
       const labelUnit =
         unitOverride ||
         this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
         "";
-      const numericW = this._toWatts(numeric, labelUnit, true);
-      const hasNumeric = Number.isFinite(numericW);
+      const numericW = isUnavailable ? 0 : this._toWatts(numeric, labelUnit, true);
+      const hasNumeric = isUnavailable ? true : Number.isFinite(numericW);
+      const val = isUnavailable
+        ? "0"
+        : hasNumeric
+        ? this._formatPowerWithOverride(numericW, decimals, "W", unitOverride ?? null)
+        : this._formatEntity(entity, decimals, attribute, unitOverride);
       const threshold = this._toWatts(this._parseThreshold(lbl.threshold), "W", true);
       const opacity = hasNumeric ? this._opacityFor(numericW, threshold) : 1;
       const hidden = hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
@@ -3758,15 +3778,22 @@ class CompactPowerCard extends (window.LitElement ||
         const unitOverride = this._getUnitOverride(lbl);
         const icon = lbl.icon || this._getLabelIcon(entity, attribute, "mdi:tag-text-outline");
         const color = lbl.color || pvColor;
-        const numeric = this._getNumericMaybe(entity, attribute);
+        const st = entity ? this.hass?.states?.[entity] : null;
+        const raw = attribute ? st?.attributes?.[attribute] : st?.state;
+        const isUnavailable = this._isUnavailableState(raw);
+        const numeric = isUnavailable ? 0 : this._getNumericMaybe(entity, attribute);
         const decimals = this._getDecimalPlaces(lbl);
-        const val = this._formatEntity(entity, decimals, attribute, unitOverride);
         const labelUnit =
           unitOverride ||
           this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
           "";
-        const numericW = this._toWatts(numeric, labelUnit, true);
-        const hasNumeric = Number.isFinite(numericW);
+        const numericW = isUnavailable ? 0 : this._toWatts(numeric, labelUnit, true);
+        const hasNumeric = isUnavailable ? true : Number.isFinite(numericW);
+        const val = isUnavailable
+          ? "0"
+          : hasNumeric
+          ? this._formatPowerWithOverride(numericW, decimals, "W", unitOverride ?? null)
+          : this._formatEntity(entity, decimals, attribute, unitOverride);
         const threshold = this._toWatts(this._parseThreshold(lbl.threshold), "W", true);
         const opacity = hasNumeric ? (numericW === 0 ? 1 : this._opacityFor(numericW, threshold)) : 1;
         const hidden = hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
