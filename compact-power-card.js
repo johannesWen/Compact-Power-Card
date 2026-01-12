@@ -3658,6 +3658,7 @@ class CompactPowerCard extends (window.LitElement ||
       const st = entity ? this.hass?.states?.[entity] : null;
       const raw = attribute ? st?.attributes?.[attribute] : st?.state;
       const isUnavailable = this._isUnavailableState(raw);
+      const isPowerEntity = this._isPowerDevice(entity);
       const numeric = isUnavailable ? 0 : this._getNumericMaybe(entity, attribute);
       const decimals = this._getDecimalPlaces(lbl);
       const labelUnit =
@@ -3665,15 +3666,23 @@ class CompactPowerCard extends (window.LitElement ||
         this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
         "";
       const numericW = isUnavailable ? 0 : this._toWatts(numeric, labelUnit, true);
-      const hasNumeric = isUnavailable ? true : Number.isFinite(numericW);
+      const hasNumeric = isUnavailable
+        ? true
+        : Number.isFinite(isPowerEntity ? numericW : numeric);
       const val = isUnavailable
         ? "0"
         : hasNumeric
-        ? this._formatPowerWithOverride(numericW, decimals, "W", unitOverride ?? null)
+        ? isPowerEntity
+          ? this._formatPowerWithOverride(numericW, decimals, "W", unitOverride ?? null)
+          : this._formatEntity(entity, decimals, attribute, unitOverride)
         : this._formatEntity(entity, decimals, attribute, unitOverride);
       const threshold = this._toWatts(this._parseThreshold(lbl.threshold), "W", true);
-      const opacity = hasNumeric ? (numericW === 0 ? 1 : this._opacityFor(numericW, threshold)) : 1;
-      const hidden = hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
+      const opacity =
+        isPowerEntity && hasNumeric
+          ? (numericW === 0 ? 1 : this._opacityFor(numericW, threshold))
+          : 1;
+      const hidden =
+        isPowerEntity && hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
       const pos = gridLabelPositions[idx] || gridLabelPositions[gridLabelPositions.length - 1];
       return {
         entity,
@@ -3684,7 +3693,7 @@ class CompactPowerCard extends (window.LitElement ||
         hidden,
         xPct: pos.xPct,
         yPx: pos.yPx,
-        numeric: hasNumeric ? numericW : 0,
+        numeric: hasNumeric ? (isPowerEntity ? numericW : numeric) : 0,
       };
     });
 
@@ -3708,6 +3717,7 @@ class CompactPowerCard extends (window.LitElement ||
       const st = entity ? this.hass?.states?.[entity] : null;
       const raw = attribute ? st?.attributes?.[attribute] : st?.state;
       const isUnavailable = this._isUnavailableState(raw);
+      const isPowerEntity = this._isPowerDevice(entity);
       const numeric = isUnavailable ? 0 : this._getNumericMaybe(entity, attribute);
       const decimals = this._getDecimalPlaces(lbl);
       const labelUnit =
@@ -3715,15 +3725,21 @@ class CompactPowerCard extends (window.LitElement ||
         this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
         "";
       const numericW = isUnavailable ? 0 : this._toWatts(numeric, labelUnit, true);
-      const hasNumeric = isUnavailable ? true : Number.isFinite(numericW);
+      const hasNumeric = isUnavailable
+        ? true
+        : Number.isFinite(isPowerEntity ? numericW : numeric);
       const val = isUnavailable
         ? "0"
         : hasNumeric
-        ? this._formatPowerWithOverride(numericW, decimals, "W", unitOverride ?? null)
+        ? isPowerEntity
+          ? this._formatPowerWithOverride(numericW, decimals, "W", unitOverride ?? null)
+          : this._formatEntity(entity, decimals, attribute, unitOverride)
         : this._formatEntity(entity, decimals, attribute, unitOverride);
       const threshold = this._toWatts(this._parseThreshold(lbl.threshold), "W", true);
-      const opacity = hasNumeric ? this._opacityFor(numericW, threshold) : 1;
-      const hidden = hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
+      const opacity =
+        isPowerEntity && hasNumeric ? this._opacityFor(numericW, threshold) : 1;
+      const hidden =
+        isPowerEntity && hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
       const pos = batteryLabelPositions[idx] || batteryLabelPositions[batteryLabelPositions.length - 1];
       return {
         entity,
@@ -3734,7 +3750,7 @@ class CompactPowerCard extends (window.LitElement ||
         hidden,
         xPct: pos.xPct,
         yPx: pos.yPx,
-        numeric: hasNumeric ? numericW : 0,
+        numeric: hasNumeric ? (isPowerEntity ? numericW : numeric) : 0,
       };
     });
 
@@ -3781,6 +3797,7 @@ class CompactPowerCard extends (window.LitElement ||
         const st = entity ? this.hass?.states?.[entity] : null;
         const raw = attribute ? st?.attributes?.[attribute] : st?.state;
         const isUnavailable = this._isUnavailableState(raw);
+        const isPowerEntity = this._isPowerDevice(entity);
         const numeric = isUnavailable ? 0 : this._getNumericMaybe(entity, attribute);
         const decimals = this._getDecimalPlaces(lbl);
         const labelUnit =
@@ -3788,15 +3805,23 @@ class CompactPowerCard extends (window.LitElement ||
           this.hass?.states?.[entity]?.attributes?.unit_of_measurement ||
           "";
         const numericW = isUnavailable ? 0 : this._toWatts(numeric, labelUnit, true);
-        const hasNumeric = isUnavailable ? true : Number.isFinite(numericW);
+        const hasNumeric = isUnavailable
+          ? true
+          : Number.isFinite(isPowerEntity ? numericW : numeric);
         const val = isUnavailable
           ? "0"
           : hasNumeric
-          ? this._formatPowerWithOverride(numericW, decimals, "W", unitOverride ?? null)
+          ? isPowerEntity
+            ? this._formatPowerWithOverride(numericW, decimals, "W", unitOverride ?? null)
+            : this._formatEntity(entity, decimals, attribute, unitOverride)
           : this._formatEntity(entity, decimals, attribute, unitOverride);
         const threshold = this._toWatts(this._parseThreshold(lbl.threshold), "W", true);
-        const opacity = hasNumeric ? (numericW === 0 ? 1 : this._opacityFor(numericW, threshold)) : 1;
-        const hidden = hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
+        const opacity =
+          isPowerEntity && hasNumeric
+            ? (numericW === 0 ? 1 : this._opacityFor(numericW, threshold))
+            : 1;
+        const hidden =
+          isPowerEntity && hasNumeric ? this._isBelowThreshold(numericW, threshold) : false;
         const posMeta = pvLabelPositions[idx] || pvLabelPositions[pvLabelPositions.length - 1];
         const leftPct = (posMeta.x / baseWidth) * 100;
         const yPct = pctBaseY(pvLabelY); // PV stays fixed in Y
@@ -3810,7 +3835,7 @@ class CompactPowerCard extends (window.LitElement ||
           hidden,
           leftPct,
           topPct: yPct,
-          numeric: hasNumeric ? numericW : 0,
+          numeric: hasNumeric ? (isPowerEntity ? numericW : numeric) : 0,
         };
       });
 
